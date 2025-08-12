@@ -16,10 +16,13 @@ A simple and fast Go tool for file integrity monitoring. Detects unauthorized fi
 # Build from source
 git clone https://github.com/catatsuy/kekkai.git
 cd kekkai
-make build
+make
 
-# Install to system
-make install
+# Or directly with go build
+go build -o kekkai ./cmd/kekkai
+
+# Run tests
+make test
 ```
 
 ## Usage
