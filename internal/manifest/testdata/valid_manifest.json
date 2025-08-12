@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "total_hash": "abc123def456789",
+  "file_count": 3,
+  "generated_at": "2024-01-01T00:00:00Z",
+  "files": [
+    {
+      "path": "file1.txt",
+      "hash": "hash1",
+      "size": 100
+    },
+    {
+      "path": "file2.txt",
+      "hash": "hash2",
+      "size": 200
+    },
+    {
+      "path": "file3.txt",
+      "hash": "hash3",
+      "size": 300
+    }
+  ]
+}
