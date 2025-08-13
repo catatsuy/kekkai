@@ -122,9 +122,7 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 
 	// Start workers
 	for i := 0; i < c.numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for path := range jobs {
 				info, err := os.Lstat(path) // Use Lstat to get symlink info
 				if err != nil {
@@ -171,7 +169,7 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 					}
 				}
 			}
-		}()
+		})
 	}
 
 	// Send jobs
