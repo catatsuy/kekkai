@@ -24,13 +24,19 @@ Traditional tools like `tar` or file sync utilities (e.g., `rsync`) include meta
    - Only exclude server-generated files (logs, cache, uploads, NFS mounts)
    - Application dependencies (vendor, node_modules) are monitored as they're part of the deployment
 
-3. **Secure Hash Storage with S3**
+3. **Symlink Security**
+   - Tracks symbolic links with their target paths
+   - Detects when symlinks are modified to point to different targets
+   - Detects when regular files are replaced with symlinks (and vice versa)
+   - Prevents attackers from hiding malicious changes through symlink manipulation
+
+4. **Secure Hash Storage with S3**
    - Deploy servers have write-only access
    - Application servers have read-only access
    - Even if compromised, attackers cannot modify stored hashes
    - Local file output available for testing
 
-4. **Tamper-Resistant Distribution**
+5. **Tamper-Resistant Distribution**
    - Single Go binary with minimal dependencies
    - Recommended to run with restricted permissions
    - Configuration should be read from S3 or managed paths, not local files
