@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -410,6 +411,110 @@ func TestVerifyIntegrityWithPatterns(t *testing.T) {
 	}
 }
 
+func TestSymlinkSecurity(t *testing.T) {
+	calc := NewCalculator()
+
+	t.Run("detect symlink manipulation", func(t *testing.T) {
+		// Create test directory structure
+		tempDir, err := os.MkdirTemp("", "test-symlink-security")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create a regular file
+		regularFile := filepath.Join(tempDir, "regular.txt")
+		if err := os.WriteFile(regularFile, []byte("regular content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a symlink
+		symlinkFile := filepath.Join(tempDir, "symlink.txt")
+		targetFile := filepath.Join(tempDir, "target.txt")
+		if err := os.WriteFile(targetFile, []byte("target content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(targetFile, symlinkFile); err != nil {
+			t.Fatal(err)
+		}
+
+		// Generate manifest
+		manifest, err := calc.CalculateDirectory(tempDir, nil)
+		if err != nil {
+			t.Fatalf("Failed to generate manifest: %v", err)
+		}
+
+		// Verify we captured both regular file and symlink
+		if manifest.FileCount != 3 { // regular.txt, target.txt, and symlink.txt
+			t.Errorf("Expected 3 files, got %d", manifest.FileCount)
+		}
+
+		// Find the symlink in the manifest
+		var symlinkInfo *FileInfo
+		for i := range manifest.Files {
+			if manifest.Files[i].Path == "symlink.txt" {
+				symlinkInfo = &manifest.Files[i]
+				break
+			}
+		}
+
+		if symlinkInfo == nil {
+			t.Fatal("Symlink not found in manifest")
+		}
+
+		if !symlinkInfo.IsSymlink {
+			t.Error("Symlink should be marked as symlink")
+		}
+
+		if symlinkInfo.LinkTarget != targetFile {
+			t.Errorf("Symlink target mismatch: expected %s, got %s", targetFile, symlinkInfo.LinkTarget)
+		}
+
+		// Test 1: Change symlink target - should be detected
+		os.Remove(symlinkFile)
+		newTarget := filepath.Join(tempDir, "evil.txt")
+		if err := os.WriteFile(newTarget, []byte("evil content"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(newTarget, symlinkFile); err != nil {
+			t.Fatal(err)
+		}
+
+		err = VerifyIntegrity(manifest, tempDir)
+		if err == nil {
+			t.Error("Should detect symlink target change")
+		} else if !strings.Contains(err.Error(), "modified") {
+			t.Errorf("Error should mention modification: %v", err)
+		}
+
+		// Test 2: Replace symlink with regular file - should be detected
+		os.Remove(symlinkFile)
+		if err := os.WriteFile(symlinkFile, []byte("now regular"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		err = VerifyIntegrity(manifest, tempDir)
+		if err == nil {
+			t.Error("Should detect symlink replaced with regular file")
+		} else if !strings.Contains(err.Error(), "modified") {
+			t.Errorf("Error should mention modification: %v", err)
+		}
+
+		// Test 3: Replace regular file with symlink - should be detected
+		os.Remove(regularFile)
+		if err := os.Symlink(targetFile, regularFile); err != nil {
+			t.Fatal(err)
+		}
+
+		err = VerifyIntegrity(manifest, tempDir)
+		if err == nil {
+			t.Error("Should detect regular file replaced with symlink")
+		} else if !strings.Contains(err.Error(), "modified") {
+			t.Errorf("Error should mention modification: %v", err)
+		}
+	})
+}
+
 func TestSymlinkHandling(t *testing.T) {
 	calc := NewCalculator()
 
@@ -462,21 +567,43 @@ func TestSymlinkHandling(t *testing.T) {
 		}
 	})
 
-	t.Run("file symlinks are skipped", func(t *testing.T) {
+	t.Run("file symlinks are tracked", func(t *testing.T) {
 		// Calculate hash for directory containing file symlinks
 		result, err := calc.CalculateDirectory("testdata/symlink-test", nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate hash: %v", err)
 		}
 
-		// Should only find the real file, not the symlink
-		if result.FileCount != 1 {
-			t.Errorf("Expected 1 file (real.txt), got %d", result.FileCount)
+		// Should find both the real file and the symlink
+		if result.FileCount != 2 {
+			t.Errorf("Expected 2 files (real.txt and link.txt), got %d", result.FileCount)
 		}
 
-		// Check that only real.txt is included
-		if len(result.Files) != 1 || result.Files[0].Path != "real.txt" {
-			t.Errorf("Expected only real.txt, got: %v", result.Files)
+		// Check that both files are included
+		foundReal := false
+		foundLink := false
+		for _, f := range result.Files {
+			if f.Path == "real.txt" {
+				foundReal = true
+				if f.IsSymlink {
+					t.Error("real.txt should not be marked as symlink")
+				}
+			} else if f.Path == "link.txt" {
+				foundLink = true
+				if !f.IsSymlink {
+					t.Error("link.txt should be marked as symlink")
+				}
+				if f.LinkTarget != "real.txt" {
+					t.Errorf("link.txt should point to real.txt, got: %s", f.LinkTarget)
+				}
+			}
+		}
+
+		if !foundReal {
+			t.Error("real.txt not found in results")
+		}
+		if !foundLink {
+			t.Error("link.txt not found in results")
 		}
 	})
 }

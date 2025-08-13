@@ -13,11 +13,13 @@ import (
 	"sync"
 )
 
-// FileInfo represents information about a single file
+// FileInfo represents information about a single file or symlink
 type FileInfo struct {
-	Path string `json:"path"`
-	Hash string `json:"hash"`
-	Size int64  `json:"size"`
+	Path       string `json:"path"`
+	Hash       string `json:"hash"`
+	Size       int64  `json:"size"`
+	IsSymlink  bool   `json:"is_symlink,omitempty"`
+	LinkTarget string `json:"link_target,omitempty"`
 }
 
 // Result represents the result of hash calculation
@@ -90,12 +92,6 @@ func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, 
 			return nil
 		}
 
-		// Skip symbolic links within the directory tree for security
-		// (but the target directory itself can be a symlink)
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil
-		}
-
 		// Get relative path
 		relPath, err := filepath.Rel(rootDir, path)
 		if err != nil {
@@ -130,25 +126,49 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 		go func() {
 			defer wg.Done()
 			for path := range jobs {
-				info, err := os.Stat(path)
+				info, err := os.Lstat(path) // Use Lstat to get symlink info
 				if err != nil {
 					errors <- fmt.Errorf("failed to stat %s: %w", path, err)
-					continue
-				}
-
-				hash, err := c.hashFile(path)
-				if err != nil {
-					errors <- fmt.Errorf("failed to hash %s: %w", path, err)
 					continue
 				}
 
 				relPath, _ := filepath.Rel(rootDir, path)
 				relPath = filepath.ToSlash(relPath)
 
-				results <- FileInfo{
-					Path: relPath,
-					Hash: hash,
-					Size: info.Size(),
+				// Handle symlinks
+				if info.Mode()&os.ModeSymlink != 0 {
+					target, err := os.Readlink(path)
+					if err != nil {
+						errors <- fmt.Errorf("failed to read symlink %s: %w", path, err)
+						continue
+					}
+
+					// Create a hash based on the symlink target path
+					// This ensures changes to symlink targets are detected
+					hasher := sha256.New()
+					hasher.Write([]byte("symlink:" + target))
+					hash := hex.EncodeToString(hasher.Sum(nil))
+
+					results <- FileInfo{
+						Path:       relPath,
+						Hash:       hash,
+						Size:       0,
+						IsSymlink:  true,
+						LinkTarget: target,
+					}
+				} else {
+					// Regular file
+					hash, err := c.hashFile(path)
+					if err != nil {
+						errors <- fmt.Errorf("failed to hash %s: %w", path, err)
+						continue
+					}
+
+					results <- FileInfo{
+						Path: relPath,
+						Hash: hash,
+						Size: info.Size(),
+					}
 				}
 			}
 		}()
