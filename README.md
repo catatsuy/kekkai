@@ -51,7 +51,7 @@ cd kekkai
 make
 
 # Or directly with go build
-go build -o kekkai ./cmd/kekkai
+go build -o ./bin/kekkai ./cmd/kekkai
 
 # Run tests
 make test
