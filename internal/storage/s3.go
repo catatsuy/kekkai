@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -96,104 +95,51 @@ func (s *S3Storage) Download(key string) (*manifest.Manifest, error) {
 	return &m, nil
 }
 
-// UploadWithVersioning uploads a manifest with automatic versioning
+// UploadWithVersioning uploads a manifest to a single fixed location
+// This is optimized for organizations that deploy frequently throughout the day
+// S3 bucket versioning should be enabled to maintain history
 func (s *S3Storage) UploadWithVersioning(basePath string, appName string, m *manifest.Manifest) (string, error) {
-	// Generate versioned key
-	timestamp := time.Now().UTC().Format("20060102-150405")
-	key := fmt.Sprintf("%s/%s/%s-%s.json", basePath, appName, timestamp, m.TotalHash[:8])
+	// Use a fixed key path for single file storage
+	key := fmt.Sprintf("%s/%s/manifest.json", basePath, appName)
 
 	// Upload manifest
 	if err := s.Upload(key, m); err != nil {
 		return "", err
 	}
 
-	// Update latest pointer
-	latestKey := fmt.Sprintf("%s/%s/latest.json", basePath, appName)
-	if err := s.updateLatestPointer(latestKey, key, m); err != nil {
-		return "", fmt.Errorf("failed to update latest pointer: %w", err)
-	}
-
 	return key, nil
-}
-
-// updateLatestPointer updates the latest.json file to point to the current manifest
-func (s *S3Storage) updateLatestPointer(latestKey string, currentKey string, m *manifest.Manifest) error {
-	metadata := map[string]interface{}{
-		"current_key": currentKey,
-		"total_hash":  m.TotalHash,
-		"updated_at":  time.Now().UTC().Format(time.RFC3339),
-		"file_count":  m.FileCount,
-	}
-
-	data, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = s.client.PutObject(&s3.PutObjectInput{
-		Bucket:               aws.String(s.bucket),
-		Key:                  aws.String(latestKey),
-		Body:                 bytes.NewReader(data),
-		ContentType:          aws.String("application/json"),
-		ServerSideEncryption: aws.String("AES256"),
-	})
-
-	return err
 }
 
 // DownloadLatest downloads the latest manifest for an app
 func (s *S3Storage) DownloadLatest(basePath string, appName string) (*manifest.Manifest, error) {
-	// First, get the latest pointer
-	latestKey := fmt.Sprintf("%s/%s/latest.json", basePath, appName)
-
-	result, err := s.client.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(latestKey),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest pointer: %w", err)
-	}
-	defer result.Body.Close()
-
-	// Read latest metadata
-	var metadata map[string]interface{}
-	decoder := json.NewDecoder(result.Body)
-	if err := decoder.Decode(&metadata); err != nil {
-		return nil, fmt.Errorf("failed to decode latest metadata: %w", err)
-	}
-
-	// Get actual manifest key
-	currentKey, ok := metadata["current_key"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid latest pointer format")
-	}
-
-	// Download actual manifest
-	return s.Download(currentKey)
+	// Direct download from the single manifest file
+	key := fmt.Sprintf("%s/%s/manifest.json", basePath, appName)
+	return s.Download(key)
 }
 
-// List lists all manifests for an app
+// List lists all versions of the manifest (requires S3 versioning enabled)
 func (s *S3Storage) List(basePath string, appName string) ([]string, error) {
-	prefix := fmt.Sprintf("%s/%s/", basePath, appName)
+	key := fmt.Sprintf("%s/%s/manifest.json", basePath, appName)
 
-	result, err := s.client.ListObjectsV2(&s3.ListObjectsV2Input{
+	// List object versions
+	result, err := s.client.ListObjectVersions(&s3.ListObjectVersionsInput{
 		Bucket: aws.String(s.bucket),
-		Prefix: aws.String(prefix),
+		Prefix: aws.String(key),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list objects: %w", err)
+		return nil, fmt.Errorf("failed to list object versions: %w", err)
 	}
 
-	var keys []string
-	for _, obj := range result.Contents {
-		key := aws.StringValue(obj.Key)
-		// Skip latest.json
-		if !bytes.HasSuffix([]byte(key), []byte("latest.json")) {
-			keys = append(keys, key)
+	var versions []string
+	for _, version := range result.Versions {
+		if aws.BoolValue(version.IsLatest) {
+			versions = append(versions, fmt.Sprintf("%s (latest)", aws.StringValue(version.VersionId)))
+		} else {
+			versions = append(versions, aws.StringValue(version.VersionId))
 		}
 	}
 
-	return keys, nil
+	return versions, nil
 }
 
 // Exists checks if a manifest exists in S3

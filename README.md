@@ -51,7 +51,9 @@ kekkai generate \
   --output manifest.json
 ```
 
-#### Using S3 Storage
+#### Using S3 Storage (Single File)
+
+For organizations that deploy frequently, Kekkai now uses a single-file storage approach. Each deployment overwrites the same `manifest.json` file, relying on S3's built-in versioning for history.
 
 ```bash
 # During deployment (save manifest to S3)
@@ -68,6 +70,11 @@ kekkai verify \
   --base-path production \
   --target /var/www/app
 ```
+
+**Benefits of Single File Storage:**
+- **Lower S3 costs** - Fewer PUT/GET/LIST operations
+- **Cleaner bucket** - Only one manifest file per application
+- **Automatic history** - S3 versioning maintains all previous versions
 
 #### Monitoring Integration
 
@@ -183,8 +190,10 @@ For production server (read-only):
 
 ### S3 Bucket Setup
 
+**Important:** S3 versioning must be enabled for history tracking with single-file storage.
+
 ```bash
-# Enable versioning
+# Enable versioning (REQUIRED for single-file storage)
 aws s3api put-bucket-versioning \
   --bucket my-manifests \
   --versioning-configuration Status=Enabled
@@ -196,6 +205,19 @@ aws s3api put-bucket-encryption \
     "Rules": [{
       "ApplyServerSideEncryptionByDefault": {
         "SSEAlgorithm": "AES256"
+      }
+    }]
+  }'
+
+# Optional: Set lifecycle policy to delete old versions after N days
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket my-manifests \
+  --lifecycle-configuration '{
+    "Rules": [{
+      "Id": "DeleteOldVersions",
+      "Status": "Enabled",
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 30
       }
     }]
   }'
@@ -220,7 +242,7 @@ rsync -av ./src/ ${DEPLOY_DIR}/
 cd ${DEPLOY_DIR}
 composer install --no-dev
 
-# 3. Generate manifest and save to S3
+# 3. Generate manifest and save to S3 (single file)
 kekkai generate \
   --target ${DEPLOY_DIR} \
   --include "**/*.php" \
@@ -230,6 +252,7 @@ kekkai generate \
   --app-name ${APP_NAME}
 
 echo "Deploy completed with integrity manifest"
+echo "Manifest saved to: ${S3_BUCKET}/${BASE_PATH}/${APP_NAME}/manifest.json"
 ```
 
 ## Command Reference
