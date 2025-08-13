@@ -19,7 +19,7 @@ func TestGenerateManifest(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	generator := NewGenerator()
-	manifest, err := generator.Generate(tempDir, nil, nil)
+	manifest, err := generator.Generate(tempDir, nil)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
@@ -168,7 +168,7 @@ func TestManifestVerify(t *testing.T) {
 
 	// Generate manifest
 	generator := NewGenerator()
-	manifest, err := generator.Generate(tempDir, nil, nil)
+	manifest, err := generator.Generate(tempDir, nil)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
@@ -247,33 +247,23 @@ func TestManifestWithPatterns(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		includes    []string
 		excludes    []string
 		expectCount int
 	}{
 		{
 			name:        "all files",
-			includes:    nil,
 			excludes:    nil,
 			expectCount: len(files),
 		},
 		{
-			name:        "only PHP files",
-			includes:    []string{"*.php", "**/*.php"},
-			excludes:    nil,
-			expectCount: 3, // index.php, config.php, vendor/lib.php
-		},
-		{
 			name:        "exclude logs and cache",
-			includes:    nil,
 			excludes:    []string{"*.log", "cache/**"},
 			expectCount: len(files) - 2,
 		},
 		{
-			name:        "PHP files excluding vendor",
-			includes:    []string{"*.php"},
+			name:        "exclude vendor",
 			excludes:    []string{"vendor/**"},
-			expectCount: 2, // index.php, config.php
+			expectCount: len(files) - 1,
 		},
 	}
 
@@ -281,7 +271,7 @@ func TestManifestWithPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manifest, err := generator.Generate(tempDir, tt.includes, tt.excludes)
+			manifest, err := generator.Generate(tempDir, tt.excludes)
 			if err != nil {
 				t.Fatalf("Generate() error = %v", err)
 			}
@@ -317,7 +307,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 	// Generate manifest with excludes
 	generator := NewGenerator()
 	excludes := []string{"*.log", ".env"}
-	manifest, err := generator.Generate(tempDir, nil, excludes)
+	manifest, err := generator.Generate(tempDir, excludes)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}

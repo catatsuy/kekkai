@@ -89,7 +89,7 @@ func TestCLIHelp(t *testing.T) {
 			name:     "generate help",
 			args:     []string{"kekkai", "generate", "--help"},
 			wantExit: ExitCodeOK,
-			contains: []string{"generate", "target", "output", "include", "exclude"},
+			contains: []string{"generate", "target", "output", "exclude"},
 		},
 		{
 			name:     "verify help",
@@ -159,26 +159,6 @@ func TestCLIGenerate(t *testing.T) {
 				}
 				if !strings.Contains(stdout, `"files"`) {
 					t.Error("Output should contain files field")
-				}
-			},
-		},
-		{
-			name: "generate with includes",
-			args: []string{"kekkai", "generate",
-				"--target", tempDir,
-				"--include", "*.php",
-				"--include", "*.txt",
-			},
-			wantExit: ExitCodeOK,
-			check: func(t *testing.T, stdout, stderr string) {
-				if !strings.Contains(stdout, "test.txt") {
-					t.Error("Output should include test.txt")
-				}
-				if !strings.Contains(stdout, "index.php") {
-					t.Error("Output should include index.php")
-				}
-				if strings.Contains(stdout, "script.js") {
-					t.Error("Output should not include script.js")
 				}
 			},
 		},

@@ -16,7 +16,6 @@ type Manifest struct {
 	TotalHash   string          `json:"total_hash"`
 	FileCount   int             `json:"file_count"`
 	GeneratedAt string          `json:"generated_at"`
-	Includes    []string        `json:"includes,omitempty"`
 	Excludes    []string        `json:"excludes,omitempty"`
 	Files       []hash.FileInfo `json:"files"`
 }
@@ -34,9 +33,9 @@ func NewGenerator() *Generator {
 }
 
 // Generate creates a manifest for the specified directory
-func (g *Generator) Generate(targetDir string, includes, excludes []string) (*Manifest, error) {
+func (g *Generator) Generate(targetDir string, excludes []string) (*Manifest, error) {
 	// Calculate hashes
-	result, err := g.calculator.CalculateDirectory(targetDir, includes, excludes)
+	result, err := g.calculator.CalculateDirectory(targetDir, excludes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate directory hash: %w", err)
 	}
@@ -47,7 +46,6 @@ func (g *Generator) Generate(targetDir string, includes, excludes []string) (*Ma
 		TotalHash:   result.TotalHash,
 		FileCount:   result.FileCount,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		Includes:    includes,
 		Excludes:    excludes,
 		Files:       result.Files,
 	}
@@ -119,7 +117,7 @@ func (m *Manifest) Verify(targetDir string) error {
 		FileCount: m.FileCount,
 	}
 
-	return hash.VerifyIntegrityWithPatterns(result, targetDir, m.Includes, m.Excludes)
+	return hash.VerifyIntegrityWithPatterns(result, targetDir, m.Excludes)
 }
 
 // GetSummary returns a summary of the manifest

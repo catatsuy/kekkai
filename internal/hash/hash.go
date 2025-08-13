@@ -41,7 +41,7 @@ func NewCalculator() *Calculator {
 }
 
 // CalculateDirectory calculates hash for all files in a directory
-func (c *Calculator) CalculateDirectory(rootDir string, includes, excludes []string) (*Result, error) {
+func (c *Calculator) CalculateDirectory(rootDir string, excludes []string) (*Result, error) {
 	// Resolve symlink if the target directory itself is a symlink
 	resolvedDir, err := filepath.EvalSymlinks(rootDir)
 	if err != nil {
@@ -49,7 +49,7 @@ func (c *Calculator) CalculateDirectory(rootDir string, includes, excludes []str
 	}
 
 	// Collect files
-	files, err := c.collectFiles(resolvedDir, includes, excludes)
+	files, err := c.collectFiles(resolvedDir, excludes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect files: %w", err)
 	}
@@ -76,13 +76,8 @@ func (c *Calculator) CalculateDirectory(rootDir string, includes, excludes []str
 }
 
 // collectFiles walks the directory and collects files based on patterns
-func (c *Calculator) collectFiles(rootDir string, includes, excludes []string) ([]string, error) {
+func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, error) {
 	var files []string
-
-	// Default include pattern
-	if len(includes) == 0 {
-		includes = []string{"**/*"}
-	}
 
 	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -109,8 +104,8 @@ func (c *Calculator) collectFiles(rootDir string, includes, excludes []string) (
 		// Normalize path (use forward slash even on Windows)
 		relPath = filepath.ToSlash(relPath)
 
-		// Check patterns
-		if !matchPatterns(relPath, includes, excludes) {
+		// Check exclude patterns
+		if matchExcludePatterns(relPath, excludes) {
 			return nil
 		}
 
@@ -230,22 +225,13 @@ func (c *Calculator) calculateTotalHash(files []FileInfo) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// matchPatterns checks if a path matches include/exclude patterns
-func matchPatterns(path string, includes, excludes []string) bool {
-	// Check excludes first
+// matchExcludePatterns checks if a path matches exclude patterns
+func matchExcludePatterns(path string, excludes []string) bool {
 	for _, pattern := range excludes {
-		if matched := matchGlob(pattern, path); matched {
-			return false
-		}
-	}
-
-	// Check includes
-	for _, pattern := range includes {
 		if matched := matchGlob(pattern, path); matched {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -293,7 +279,7 @@ func VerifyIntegrity(manifest *Result, targetDir string) error {
 	}
 
 	// Calculate current state
-	current, err := calculator.CalculateDirectory(resolvedDir, nil, nil)
+	current, err := calculator.CalculateDirectory(resolvedDir, nil)
 	if err != nil {
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}
@@ -342,7 +328,7 @@ func VerifyIntegrity(manifest *Result, targetDir string) error {
 }
 
 // VerifyIntegrityWithPatterns verifies the integrity of files against a manifest with patterns
-func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, includes, excludes []string) error {
+func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, excludes []string) error {
 	calculator := NewCalculator()
 
 	// Resolve symlink if the target directory itself is a symlink
@@ -352,7 +338,7 @@ func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, includes, e
 	}
 
 	// Calculate current state with same patterns
-	current, err := calculator.CalculateDirectory(resolvedDir, includes, excludes)
+	current, err := calculator.CalculateDirectory(resolvedDir, excludes)
 	if err != nil {
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}

@@ -64,7 +64,7 @@ func TestCalculateDirectory(t *testing.T) {
 	calc := NewCalculator()
 
 	// Test with testdata directory
-	result, err := calc.CalculateDirectory("testdata/sample", nil, nil)
+	result, err := calc.CalculateDirectory("testdata/sample", nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() error = %v", err)
 	}
@@ -75,7 +75,7 @@ func TestCalculateDirectory(t *testing.T) {
 	}
 
 	// Verify deterministic hash
-	result2, err := calc.CalculateDirectory("testdata/sample", nil, nil)
+	result2, err := calc.CalculateDirectory("testdata/sample", nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() second call error = %v", err)
 	}
@@ -104,31 +104,35 @@ func TestCalculateDirectoryWithPatterns(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		includes     []string
 		excludes     []string
 		expectFiles  []string
 		excludeFiles []string
 	}{
 		{
-			name:     "include PHP files",
-			includes: []string{"*.php"},
+			name:     "no excludes - all files",
 			excludes: nil,
 			expectFiles: []string{
 				"index.php",
 				"config.php",
-			},
-			excludeFiles: []string{
 				"README.md",
 				"script.js",
+				"app.log",
+				"error.log",
+				"src/main.go",
+				"src/lib/helper.go",
 			},
+			excludeFiles: []string{},
 		},
 		{
 			name:     "exclude log files",
-			includes: nil,
 			excludes: []string{"*.log"},
 			expectFiles: []string{
 				"index.php",
+				"config.php",
 				"README.md",
+				"script.js",
+				"src/main.go",
+				"src/lib/helper.go",
 			},
 			excludeFiles: []string{
 				"app.log",
@@ -136,23 +140,26 @@ func TestCalculateDirectoryWithPatterns(t *testing.T) {
 			},
 		},
 		{
-			name:     "include subdirectories",
-			includes: []string{"src/**"},
-			excludes: nil,
+			name:     "exclude src directory",
+			excludes: []string{"src/**"},
 			expectFiles: []string{
-				"src/main.go",
-				"src/lib/helper.go",
+				"index.php",
+				"config.php",
+				"README.md",
+				"script.js",
+				"app.log",
+				"error.log",
 			},
 			excludeFiles: []string{
-				"index.php",
-				"README.md",
+				"src/main.go",
+				"src/lib/helper.go",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := calc.CalculateDirectory("testdata/patterns", tt.includes, tt.excludes)
+			result, err := calc.CalculateDirectory("testdata/patterns", tt.excludes)
 			if err != nil {
 				t.Fatalf("CalculateDirectory() error = %v", err)
 			}
@@ -180,63 +187,50 @@ func TestCalculateDirectoryWithPatterns(t *testing.T) {
 	}
 }
 
-func TestMatchPatterns(t *testing.T) {
+func TestMatchExcludePatterns(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
-		includes []string
 		excludes []string
-		expected bool
+		expected bool // true if should be excluded
 	}{
 		{
-			name:     "match exact filename",
+			name:     "no excludes",
 			path:     "index.php",
-			includes: []string{"index.php"},
 			excludes: nil,
-			expected: true,
-		},
-		{
-			name:     "match wildcard extension",
-			path:     "test.php",
-			includes: []string{"*.php"},
-			excludes: nil,
-			expected: true,
-		},
-		{
-			name:     "exclude pattern",
-			path:     "test.log",
-			includes: []string{"*"},
-			excludes: []string{"*.log"},
 			expected: false,
 		},
 		{
-			name:     "subdirectory with **",
-			path:     "src/main.go",
-			includes: []string{"src/**"},
-			excludes: nil,
+			name:     "exclude exact filename",
+			path:     "test.log",
+			excludes: []string{"test.log"},
 			expected: true,
 		},
 		{
-			name:     "deep subdirectory with **",
-			path:     "vendor/lib/deep/file.php",
-			includes: []string{"vendor/**"},
-			excludes: nil,
+			name:     "exclude wildcard extension",
+			path:     "test.log",
+			excludes: []string{"*.log"},
 			expected: true,
 		},
 		{
-			name:     "exclude overrides include",
+			name:     "exclude subdirectory with **",
+			path:     "vendor/lib/file.php",
+			excludes: []string{"vendor/**"},
+			expected: true,
+		},
+		{
+			name:     "not excluded",
 			path:     "test.php",
-			includes: []string{"*.php"},
-			excludes: []string{"test.php"},
+			excludes: []string{"*.log"},
 			expected: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchPatterns(tt.path, tt.includes, tt.excludes)
+			result := matchExcludePatterns(tt.path, tt.excludes)
 			if result != tt.expected {
-				t.Errorf("matchPatterns(%s) = %v, want %v", tt.path, result, tt.expected)
+				t.Errorf("matchExcludePatterns(%s) = %v, want %v", tt.path, result, tt.expected)
 			}
 		})
 	}
@@ -246,7 +240,7 @@ func TestVerifyIntegrity(t *testing.T) {
 	calc := NewCalculator()
 
 	// Generate initial manifest
-	manifest, err := calc.CalculateDirectory("testdata/sample", nil, nil)
+	manifest, err := calc.CalculateDirectory("testdata/sample", nil)
 	if err != nil {
 		t.Fatalf("Failed to generate manifest: %v", err)
 	}
@@ -377,7 +371,7 @@ func TestVerifyIntegrityWithPatterns(t *testing.T) {
 			}
 
 			// Calculate manifest with excludes
-			manifest, err := calc.CalculateDirectory(testDir, nil, tt.excludes)
+			manifest, err := calc.CalculateDirectory(testDir, tt.excludes)
 			if err != nil {
 				t.Fatalf("CalculateDirectory() error = %v", err)
 			}
@@ -399,7 +393,7 @@ func TestVerifyIntegrityWithPatterns(t *testing.T) {
 			}
 
 			// Verify with patterns
-			err = VerifyIntegrityWithPatterns(manifest, testDir, nil, tt.excludes)
+			err = VerifyIntegrityWithPatterns(manifest, testDir, tt.excludes)
 
 			if tt.expectSuccess {
 				if err != nil {
@@ -421,13 +415,13 @@ func TestSymlinkHandling(t *testing.T) {
 
 	t.Run("directory symlink as target", func(t *testing.T) {
 		// Calculate hash for the real directory
-		realResult, err := calc.CalculateDirectory("testdata/patterns", nil, nil)
+		realResult, err := calc.CalculateDirectory("testdata/patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate hash for real directory: %v", err)
 		}
 
 		// Calculate hash for the symlink to the directory
-		symlinkResult, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil, nil)
+		symlinkResult, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate hash for symlink directory: %v", err)
 		}
@@ -444,7 +438,7 @@ func TestSymlinkHandling(t *testing.T) {
 
 	t.Run("verify with directory symlink", func(t *testing.T) {
 		// Generate manifest from real directory
-		manifest, err := calc.CalculateDirectory("testdata/patterns", nil, nil)
+		manifest, err := calc.CalculateDirectory("testdata/patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to generate manifest: %v", err)
 		}
@@ -456,7 +450,7 @@ func TestSymlinkHandling(t *testing.T) {
 		}
 
 		// Generate manifest from symlink
-		symlinkManifest, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil, nil)
+		symlinkManifest, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to generate manifest from symlink: %v", err)
 		}
@@ -470,7 +464,7 @@ func TestSymlinkHandling(t *testing.T) {
 
 	t.Run("file symlinks are skipped", func(t *testing.T) {
 		// Calculate hash for directory containing file symlinks
-		result, err := calc.CalculateDirectory("testdata/symlink-test", nil, nil)
+		result, err := calc.CalculateDirectory("testdata/symlink-test", nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate hash: %v", err)
 		}
@@ -508,7 +502,7 @@ func TestParallelCalculation(t *testing.T) {
 	}
 
 	// Calculate hash
-	result, err := calc.CalculateDirectory(tempDir, nil, nil)
+	result, err := calc.CalculateDirectory(tempDir, nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() error = %v", err)
 	}
@@ -518,7 +512,7 @@ func TestParallelCalculation(t *testing.T) {
 	}
 
 	// Verify deterministic with parallel processing
-	result2, err := calc.CalculateDirectory(tempDir, nil, nil)
+	result2, err := calc.CalculateDirectory(tempDir, nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() second call error = %v", err)
 	}

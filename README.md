@@ -44,8 +44,6 @@ kekkai verify --manifest manifest.json --target /var/www/app
 ```bash
 kekkai generate \
   --target /var/www/app \
-  --include "*.php" \
-  --include "vendor/**" \
   --exclude "*.log" \
   --exclude "cache/**" \
   --output manifest.json
@@ -103,13 +101,9 @@ Configure your monitoring system to alert based on your requirements (e.g., aler
 ```bash
 kekkai generate \
   --target /var/www/app \
-  --include "**/*.php" \
-  --include "composer.json" \
-  --include "composer.lock" \
-  --include "vendor/**" \
-  --include ".env" \
   --exclude "storage/**" \
   --exclude "bootstrap/cache/**" \
+  --exclude "*.log" \
   --output manifest.json
 ```
 
@@ -118,11 +112,9 @@ kekkai generate \
 ```bash
 kekkai generate \
   --target /var/www/app \
-  --include "**/*.js" \
-  --include "**/*.json" \
-  --include "node_modules/**" \
   --exclude "node_modules/.cache/**" \
   --exclude "dist/**" \
+  --exclude "*.log" \
   --output manifest.json
 ```
 
@@ -131,11 +123,9 @@ kekkai generate \
 ```bash
 kekkai generate \
   --target /var/www/app \
-  --include "**/*.rb" \
-  --include "Gemfile*" \
-  --include "config/**" \
   --exclude "log/**" \
   --exclude "tmp/**" \
+  --exclude "public/assets/**" \
   --output manifest.json
 ```
 
@@ -144,12 +134,10 @@ kekkai generate \
 ```bash
 kekkai generate \
   --target /var/www/app \
-  --include "**/*.py" \
-  --include "requirements.txt" \
-  --include "*/migrations/**" \
   --exclude "**/__pycache__/**" \
   --exclude "media/**" \
   --exclude "staticfiles/**" \
+  --exclude "*.pyc" \
   --output manifest.json
 ```
 
@@ -254,9 +242,8 @@ composer install --no-dev
 # Note: For production, explicitly specify --base-path production
 kekkai generate \
   --target ${DEPLOY_DIR} \
-  --include "**/*.php" \
-  --include "vendor/**" \
   --exclude "storage/**" \
+  --exclude "bootstrap/cache/**" \
   --s3-bucket ${S3_BUCKET} \
   --app-name ${APP_NAME} \
   --base-path production  # MUST be explicit for production
@@ -275,7 +262,6 @@ Generate a manifest file.
 Options:
   -target string      Target directory (default ".")
   -output string      Output file, "-" for stdout (default "-")
-  -include string     Include pattern (can be specified multiple times)
   -exclude string     Exclude pattern (can be specified multiple times)
   -s3-bucket string   S3 bucket name
   -s3-key string      S3 key path

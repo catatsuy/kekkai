@@ -88,7 +88,6 @@ func (c *CLI) Run(args []string) int {
 // runGenerate handles the generate command
 func (c *CLI) runGenerate(args []string) int {
 	var (
-		includes arrayFlags
 		excludes arrayFlags
 
 		target   string
@@ -116,7 +115,6 @@ func (c *CLI) runGenerate(args []string) int {
 	flags.BoolVar(&help, "help", false, "Show help for generate command")
 	flags.BoolVar(&help, "h", false, "Show help for generate command")
 
-	flags.Var(&includes, "include", "Include pattern (can be specified multiple times)")
 	flags.Var(&excludes, "exclude", "Exclude pattern (can be specified multiple times)")
 
 	err := flags.Parse(args[2:])
@@ -131,7 +129,7 @@ func (c *CLI) runGenerate(args []string) int {
 
 	// Generate manifest
 	generator := manifest.NewGenerator()
-	m, err := generator.Generate(target, includes, excludes)
+	m, err := generator.Generate(target, excludes)
 	if err != nil {
 		c.outputGenerateError(err, format)
 		return ExitCodeFail
@@ -412,12 +410,11 @@ Examples:
   # Generate manifest for current directory
   kekkai generate --output manifest.json
 
-  # Generate with specific includes/excludes
+  # Generate with specific excludes
   kekkai generate \
     --target /var/www/app \
-    --include "*.php" \
-    --include "vendor/**" \
     --exclude "*.log" \
+    --exclude "cache/**" \
     --output manifest.json
 
   # Generate and upload to S3
