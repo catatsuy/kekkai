@@ -82,9 +82,9 @@ kekkai generate \
   --output manifest.json
 ```
 
-#### Using S3 Storage (Single File)
+#### Using S3 Storage
 
-For organizations that deploy frequently, Kekkai now uses a single-file storage approach. Each deployment overwrites the same `manifest.json` file, relying on S3's built-in versioning for history.
+Kekkai stores manifests in S3 for secure, centralized management. Each deployment updates the same `manifest.json` file, with S3's built-in versioning maintaining the history.
 
 ```bash
 # For production deployment (must explicitly specify --base-path)
@@ -109,10 +109,10 @@ kekkai verify \
   --target /var/www/app
 ```
 
-**Benefits of Single File Storage:**
-- **Lower S3 costs** - Fewer PUT/GET/LIST operations
-- **Cleaner bucket** - Only one manifest file per application
-- **Automatic history** - S3 versioning maintains all previous versions
+**Benefits:**
+- **Lower S3 costs** - Minimal S3 operations
+- **Clean structure** - One manifest file per application
+- **Automatic history** - S3 versioning tracks all changes
 
 #### Monitoring Integration
 
@@ -219,10 +219,10 @@ For production server (read-only):
 
 ### S3 Bucket Setup
 
-**Important:** S3 versioning must be enabled for history tracking with single-file storage.
+**Important:** S3 versioning must be enabled for history tracking.
 
 ```bash
-# Enable versioning (REQUIRED for single-file storage)
+# Enable versioning for history tracking
 aws s3api put-bucket-versioning \
   --bucket my-manifests \
   --versioning-configuration Status=Enabled
@@ -271,7 +271,7 @@ composer install --no-dev
 # 2. Deploy application to server
 rsync -av ./src/ ${DEPLOY_DIR}/
 
-# 3. Generate manifest and save to S3 (single file)
+# 3. Generate manifest and save to S3
 # Note: For production, explicitly specify --base-path production
 kekkai generate \
   --target ${DEPLOY_DIR} \
@@ -353,4 +353,4 @@ A: Verify that the EC2 instance has the correct IAM role configured. Also check 
 
 ### Q: Verification takes too long
 
-A: For large file sets, consider using `--exclude` options to skip unnecessary directories (node_modules, vendor, etc.).
+A: For large file sets, use `--exclude` options to skip server-generated directories like logs, cache, and temporary files. Note that application dependencies (vendor, node_modules) should still be verified as they are part of the deployed application.
