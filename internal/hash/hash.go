@@ -42,14 +42,20 @@ func NewCalculator() *Calculator {
 
 // CalculateDirectory calculates hash for all files in a directory
 func (c *Calculator) CalculateDirectory(rootDir string, includes, excludes []string) (*Result, error) {
+	// Resolve symlink if the target directory itself is a symlink
+	resolvedDir, err := filepath.EvalSymlinks(rootDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+
 	// Collect files
-	files, err := c.collectFiles(rootDir, includes, excludes)
+	files, err := c.collectFiles(resolvedDir, includes, excludes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect files: %w", err)
 	}
 
 	// Calculate hashes in parallel
-	fileInfos, err := c.calculateFileHashes(rootDir, files)
+	fileInfos, err := c.calculateFileHashes(resolvedDir, files)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate file hashes: %w", err)
 	}
@@ -88,7 +94,8 @@ func (c *Calculator) collectFiles(rootDir string, includes, excludes []string) (
 			return nil
 		}
 
-		// Skip symbolic links for security
+		// Skip symbolic links within the directory tree for security
+		// (but the target directory itself can be a symlink)
 		if info.Mode()&os.ModeSymlink != 0 {
 			return nil
 		}
@@ -279,8 +286,14 @@ func matchGlob(pattern, path string) bool {
 func VerifyIntegrity(manifest *Result, targetDir string) error {
 	calculator := NewCalculator()
 
+	// Resolve symlink if the target directory itself is a symlink
+	resolvedDir, err := filepath.EvalSymlinks(targetDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+
 	// Calculate current state
-	current, err := calculator.CalculateDirectory(targetDir, nil, nil)
+	current, err := calculator.CalculateDirectory(resolvedDir, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}
@@ -332,8 +345,14 @@ func VerifyIntegrity(manifest *Result, targetDir string) error {
 func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, includes, excludes []string) error {
 	calculator := NewCalculator()
 
+	// Resolve symlink if the target directory itself is a symlink
+	resolvedDir, err := filepath.EvalSymlinks(targetDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+
 	// Calculate current state with same patterns
-	current, err := calculator.CalculateDirectory(targetDir, includes, excludes)
+	current, err := calculator.CalculateDirectory(resolvedDir, includes, excludes)
 	if err != nil {
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}

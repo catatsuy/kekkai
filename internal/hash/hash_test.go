@@ -416,6 +416,77 @@ func TestVerifyIntegrityWithPatterns(t *testing.T) {
 	}
 }
 
+func TestSymlinkHandling(t *testing.T) {
+	calc := NewCalculator()
+
+	t.Run("directory symlink as target", func(t *testing.T) {
+		// Calculate hash for the real directory
+		realResult, err := calc.CalculateDirectory("testdata/patterns", nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to calculate hash for real directory: %v", err)
+		}
+
+		// Calculate hash for the symlink to the directory
+		symlinkResult, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to calculate hash for symlink directory: %v", err)
+		}
+
+		// Both should produce the same hash
+		if realResult.TotalHash != symlinkResult.TotalHash {
+			t.Error("Hash for real directory and symlink should be identical")
+		}
+
+		if realResult.FileCount != symlinkResult.FileCount {
+			t.Errorf("File count mismatch: real=%d, symlink=%d", realResult.FileCount, symlinkResult.FileCount)
+		}
+	})
+
+	t.Run("verify with directory symlink", func(t *testing.T) {
+		// Generate manifest from real directory
+		manifest, err := calc.CalculateDirectory("testdata/patterns", nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to generate manifest: %v", err)
+		}
+
+		// Verify using symlink should pass
+		err = VerifyIntegrity(manifest, "testdata/symlink-to-patterns")
+		if err != nil {
+			t.Errorf("Verification should pass for symlink: %v", err)
+		}
+
+		// Generate manifest from symlink
+		symlinkManifest, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to generate manifest from symlink: %v", err)
+		}
+
+		// Verify using real directory should pass
+		err = VerifyIntegrity(symlinkManifest, "testdata/patterns")
+		if err != nil {
+			t.Errorf("Verification should pass for real directory: %v", err)
+		}
+	})
+
+	t.Run("file symlinks are skipped", func(t *testing.T) {
+		// Calculate hash for directory containing file symlinks
+		result, err := calc.CalculateDirectory("testdata/symlink-test", nil, nil)
+		if err != nil {
+			t.Fatalf("Failed to calculate hash: %v", err)
+		}
+
+		// Should only find the real file, not the symlink
+		if result.FileCount != 1 {
+			t.Errorf("Expected 1 file (real.txt), got %d", result.FileCount)
+		}
+
+		// Check that only real.txt is included
+		if len(result.Files) != 1 || result.Files[0].Path != "real.txt" {
+			t.Errorf("Expected only real.txt, got: %v", result.Files)
+		}
+	})
+}
+
 func TestParallelCalculation(t *testing.T) {
 	calc := NewCalculator()
 	calc.numWorkers = 4 // Use multiple workers
