@@ -1,0 +1,22 @@
+project_name: kekkai
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - main: ./cmd/kekkai
+    binary: kekkai
+    ldflags:
+      - -s -w
+      - -X github.com/catatsuy/kekkai/internal/cli.Version=v{{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+archives:
+  - name_template: '{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}'
+release:
+  prerelease: auto
