@@ -215,7 +215,7 @@ func (c *CLI) runVerify(args []string) int {
 	flags.StringVar(&basePath, "base-path", "development", "Base path for S3 (e.g., production, staging, development)")
 	flags.StringVar(&appName, "app-name", "", "Application name for S3")
 	flags.StringVar(&target, "target", ".", "Target directory to verify")
-	flags.StringVar(&format, "format", "text", "Output format (text|mackerel|json)")
+	flags.StringVar(&format, "format", "text", "Output format (text|json)")
 	flags.BoolVar(&help, "help", false, "Show help for verify command")
 	flags.BoolVar(&help, "h", false, "Show help for verify command")
 
@@ -324,7 +324,7 @@ func (c *CLI) outputVerifyResult(err error, m *manifest.Manifest, format string)
 	}
 
 	var stream = c.outStream
-	if !result.Success && format != "mackerel" {
+	if !result.Success {
 		stream = c.errStream
 	}
 
