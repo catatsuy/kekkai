@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -35,8 +36,8 @@ type Calculator struct {
 // NewCalculator creates a new hash calculator
 func NewCalculator() *Calculator {
 	return &Calculator{
-		numWorkers: 4,           // Default to 4 workers
-		bufferSize: 1024 * 1024, // 1MB buffer
+		numWorkers: runtime.GOMAXPROCS(0), // Use all available CPUs
+		bufferSize: 1024 * 1024,           // 1MB buffer
 	}
 }
 
