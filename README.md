@@ -301,7 +301,6 @@ Options:
   -output string      Output file, "-" for stdout (default "-")
   -exclude string     Exclude pattern (can be specified multiple times)
   -s3-bucket string   S3 bucket name
-  -s3-key string      Custom S3 key path (rarely needed, use app-name instead)
   -s3-region string   AWS region
   -base-path string   S3 base path (default "development")
   -app-name string    Application name (creates path: {base-path}/{app-name}/manifest.json)
@@ -316,10 +315,9 @@ Verify file integrity.
 Options:
   -manifest string    Manifest file path
   -s3-bucket string   S3 bucket name
-  -s3-key string      S3 key path (alternative to app-name for custom paths)
   -s3-region string   AWS region
   -base-path string   S3 base path (default "development")
-  -app-name string    Application name for automatic S3 path
+  -app-name string    Application name (reads from: {base-path}/{app-name}/manifest.json)
   -target string      Target directory to verify (default ".")
   -format string      Output format: text, json (default "text")
 ```

@@ -44,8 +44,8 @@ func NewS3Storage(bucket string, region string) (*S3Storage, error) {
 	}, nil
 }
 
-// Upload uploads a manifest to S3
-func (s *S3Storage) Upload(key string, m *manifest.Manifest) error {
+// upload uploads a manifest to S3 (internal use only)
+func (s *S3Storage) upload(key string, m *manifest.Manifest) error {
 	// Marshal manifest to JSON
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -73,8 +73,8 @@ func (s *S3Storage) Upload(key string, m *manifest.Manifest) error {
 	return nil
 }
 
-// Download downloads a manifest from S3
-func (s *S3Storage) Download(key string) (*manifest.Manifest, error) {
+// download downloads a manifest from S3 (internal use only)
+func (s *S3Storage) download(key string) (*manifest.Manifest, error) {
 	// Get object from S3
 	result, err := s.client.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
@@ -103,18 +103,18 @@ func (s *S3Storage) UploadWithVersioning(basePath string, appName string, m *man
 	key := fmt.Sprintf("%s/%s/manifest.json", basePath, appName)
 
 	// Upload manifest
-	if err := s.Upload(key, m); err != nil {
+	if err := s.upload(key, m); err != nil {
 		return "", err
 	}
 
 	return key, nil
 }
 
-// DownloadLatest downloads the latest manifest for an app
-func (s *S3Storage) DownloadLatest(basePath string, appName string) (*manifest.Manifest, error) {
-	// Direct download from the single manifest file
+// DownloadManifest downloads the manifest for an app
+func (s *S3Storage) DownloadManifest(basePath string, appName string) (*manifest.Manifest, error) {
+	// Download from the single manifest file
 	key := fmt.Sprintf("%s/%s/manifest.json", basePath, appName)
-	return s.Download(key)
+	return s.download(key)
 }
 
 // List lists all versions of the manifest (requires S3 versioning enabled)
