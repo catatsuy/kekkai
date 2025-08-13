@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -115,78 +114,4 @@ func (s *S3Storage) DownloadManifest(basePath string, appName string) (*manifest
 	// Download from the single manifest file
 	key := fmt.Sprintf("%s/%s/manifest.json", basePath, appName)
 	return s.download(key)
-}
-
-// List lists all versions of the manifest (requires S3 versioning enabled)
-func (s *S3Storage) List(basePath string, appName string) ([]string, error) {
-	key := fmt.Sprintf("%s/%s/manifest.json", basePath, appName)
-
-	// List object versions
-	result, err := s.client.ListObjectVersions(&s3.ListObjectVersionsInput{
-		Bucket: aws.String(s.bucket),
-		Prefix: aws.String(key),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list object versions: %w", err)
-	}
-
-	var versions []string
-	for _, version := range result.Versions {
-		if aws.BoolValue(version.IsLatest) {
-			versions = append(versions, fmt.Sprintf("%s (latest)", aws.StringValue(version.VersionId)))
-		} else {
-			versions = append(versions, aws.StringValue(version.VersionId))
-		}
-	}
-
-	return versions, nil
-}
-
-// Exists checks if a manifest exists in S3
-func (s *S3Storage) Exists(key string) (bool, error) {
-	_, err := s.client.HeadObject(&s3.HeadObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(key),
-	})
-
-	if err != nil {
-		// Check if it's a not found error
-		if aerr, ok := err.(interface{ Code() string }); ok && aerr.Code() == "NotFound" {
-			return false, nil
-		}
-		return false, err
-	}
-
-	return true, nil
-}
-
-// GetMetadata gets metadata for a manifest
-func (s *S3Storage) GetMetadata(key string) (map[string]string, error) {
-	result, err := s.client.HeadObject(&s3.HeadObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get object metadata: %w", err)
-	}
-
-	metadata := make(map[string]string)
-	for k, v := range result.Metadata {
-		metadata[k] = aws.StringValue(v)
-	}
-
-	return metadata, nil
-}
-
-// Reader returns an io.ReadCloser for streaming a manifest
-func (s *S3Storage) Reader(key string) (io.ReadCloser, error) {
-	result, err := s.client.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get object: %w", err)
-	}
-
-	return result.Body, nil
 }
