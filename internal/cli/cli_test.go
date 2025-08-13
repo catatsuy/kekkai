@@ -492,13 +492,13 @@ func TestCLIInvalidCommands(t *testing.T) {
 			errMsg:   "either -manifest or -s3-bucket must be specified",
 		},
 		{
-			name: "s3 without key or app-name",
+			name: "s3 without app-name",
 			args: []string{"kekkai", "generate",
 				"--target", ".",
 				"--s3-bucket", "test-bucket",
 			},
 			wantExit: ExitCodeFail,
-			errMsg:   "Either -s3-key or -app-name must be specified",
+			errMsg:   "-app-name must be specified with -s3-bucket",
 		},
 	}
 

@@ -93,7 +93,6 @@ func (c *CLI) runGenerate(args []string) int {
 		target   string
 		output   string
 		s3Bucket string
-		s3Key    string
 		s3Region string
 		basePath string
 		appName  string
@@ -107,7 +106,6 @@ func (c *CLI) runGenerate(args []string) int {
 	flags.StringVar(&target, "target", ".", "Target directory to scan")
 	flags.StringVar(&output, "output", "-", "Output file (- for stdout)")
 	flags.StringVar(&s3Bucket, "s3-bucket", "", "S3 bucket for manifest storage")
-	flags.StringVar(&s3Key, "s3-key", "", "S3 key path")
 	flags.StringVar(&s3Region, "s3-region", "", "AWS region (uses default if not specified)")
 	flags.StringVar(&basePath, "base-path", "development", "Base path for S3 (e.g., production, staging, development)")
 	flags.StringVar(&appName, "app-name", "", "Application name for S3 versioning")
@@ -147,18 +145,14 @@ func (c *CLI) runGenerate(args []string) int {
 			return ExitCodeFail
 		}
 
-		if s3Key != "" {
-			// Use specified key
-			err = s3Storage.Upload(s3Key, m)
-			s3KeyUsed = s3Key
-		} else if appName != "" {
+		if appName != "" {
 			// Use versioning
 			key, err := s3Storage.UploadWithVersioning(basePath, appName, m)
 			if err == nil {
 				s3KeyUsed = key
 			}
 		} else {
-			fmt.Fprintf(c.errStream, "Error: Either -s3-key or -app-name must be specified with -s3-bucket\n")
+			fmt.Fprintf(c.errStream, "Error: -app-name must be specified with -s3-bucket\n")
 			return ExitCodeFail
 		}
 
@@ -194,7 +188,6 @@ func (c *CLI) runVerify(args []string) int {
 	var (
 		manifestPath string
 		s3Bucket     string
-		s3Key        string
 		s3Region     string
 		basePath     string
 		appName      string
@@ -208,7 +201,6 @@ func (c *CLI) runVerify(args []string) int {
 
 	flags.StringVar(&manifestPath, "manifest", "", "Path to manifest file")
 	flags.StringVar(&s3Bucket, "s3-bucket", "", "S3 bucket for manifest")
-	flags.StringVar(&s3Key, "s3-key", "", "S3 key path")
 	flags.StringVar(&s3Region, "s3-region", "", "AWS region (uses default if not specified)")
 	flags.StringVar(&basePath, "base-path", "development", "Base path for S3 (e.g., production, staging, development)")
 	flags.StringVar(&appName, "app-name", "", "Application name for S3")
@@ -238,14 +230,11 @@ func (c *CLI) runVerify(args []string) int {
 			return ExitCodeFail
 		}
 
-		if s3Key != "" {
-			// Load specific key
-			m, err = s3Storage.Download(s3Key)
-		} else if appName != "" {
-			// Load latest
-			m, err = s3Storage.DownloadLatest(basePath, appName)
+		if appName != "" {
+			// Load manifest
+			m, err = s3Storage.DownloadManifest(basePath, appName)
 		} else {
-			err = fmt.Errorf("either -s3-key or -app-name must be specified with -s3-bucket")
+			err = fmt.Errorf("-app-name must be specified with -s3-bucket")
 		}
 
 		if err != nil {
