@@ -209,13 +209,9 @@ For production server (read-only):
     {
       "Effect": "Allow",
       "Action": [
-        "s3:GetObject",
-        "s3:ListBucket"
+        "s3:GetObject"
       ],
-      "Resource": [
-        "arn:aws:s3:::my-manifests",
-        "arn:aws:s3:::my-manifests/*"
-      ]
+      "Resource": "arn:aws:s3:::my-manifests/*"
     }
   ]
 }
