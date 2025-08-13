@@ -2,6 +2,38 @@
 
 A simple and fast Go tool for file integrity monitoring. Detects unauthorized file modifications caused by OS command injection and other attacks by recording file hashes during deployment and verifying them periodically.
 
+The name "Kekkai" comes from the Japanese word 結界 (kekkai), meaning "barrier" - a protective boundary that keeps unwanted things out, perfectly representing this tool's purpose of protecting your files from tampering.
+
+## Design Philosophy
+
+Kekkai was designed to solve specific challenges in production server environments:
+
+### Why Kekkai?
+
+Traditional tools like `tar` or file sync utilities (e.g., `rsync`) include metadata like timestamps in their comparisons, causing false positives when only timestamps change. In environments with heavy NFS usage or dynamic log directories, existing tools become difficult to configure and maintain.
+
+### Core Principles
+
+1. **Content-Only Hashing**
+   - Hashes only file contents, ignoring timestamps and metadata
+   - Detects actual content changes, not superficial modifications
+
+2. **Immutable Exclude Rules**
+   - Exclude patterns are set during manifest generation only
+   - Cannot be modified during verification, preventing attackers from hiding changes
+   - Explicitly excludes NFS mounts and log files, while monitoring application dependencies (e.g., vendor directories)
+
+3. **Secure Hash Storage with S3**
+   - Deploy servers have write-only access
+   - Application servers have read-only access
+   - Even if compromised, attackers cannot modify stored hashes
+   - Local file output available for testing
+
+4. **Tamper-Resistant Distribution**
+   - Single Go binary with minimal dependencies
+   - Recommended to run with restricted permissions
+   - Configuration should be read from S3 or managed paths, not local files
+
 ## Features
 
 - 🚀 **Fast**: Efficient hash calculation with parallel processing
