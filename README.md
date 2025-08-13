@@ -56,14 +56,21 @@ kekkai generate \
 For organizations that deploy frequently, Kekkai now uses a single-file storage approach. Each deployment overwrites the same `manifest.json` file, relying on S3's built-in versioning for history.
 
 ```bash
-# During deployment (save manifest to S3)
+# For production deployment (must explicitly specify --base-path)
 kekkai generate \
   --target /var/www/app \
   --s3-bucket my-manifests \
   --app-name myapp \
-  --base-path production
+  --base-path production  # Explicitly required for production
 
-# During verification (fetch latest manifest from S3)
+# For staging/development (uses default "development" if not specified)
+kekkai generate \
+  --target /var/www/app \
+  --s3-bucket my-manifests \
+  --app-name myapp \
+  --base-path staging
+
+# During verification (must match the base-path used during generation)
 kekkai verify \
   --s3-bucket my-manifests \
   --app-name myapp \
@@ -83,6 +90,7 @@ kekkai verify \
 */5 * * * * kekkai verify \
   --s3-bucket my-manifests \
   --app-name myapp \
+  --base-path production \
   --target /var/www/app
 ```
 
@@ -243,16 +251,18 @@ cd ${DEPLOY_DIR}
 composer install --no-dev
 
 # 3. Generate manifest and save to S3 (single file)
+# Note: For production, explicitly specify --base-path production
 kekkai generate \
   --target ${DEPLOY_DIR} \
   --include "**/*.php" \
   --include "vendor/**" \
   --exclude "storage/**" \
   --s3-bucket ${S3_BUCKET} \
-  --app-name ${APP_NAME}
+  --app-name ${APP_NAME} \
+  --base-path production  # MUST be explicit for production
 
 echo "Deploy completed with integrity manifest"
-echo "Manifest saved to: ${S3_BUCKET}/${BASE_PATH}/${APP_NAME}/manifest.json"
+echo "Manifest saved to: ${S3_BUCKET}/production/${APP_NAME}/manifest.json"
 ```
 
 ## Command Reference
@@ -270,7 +280,7 @@ Options:
   -s3-bucket string   S3 bucket name
   -s3-key string      S3 key path
   -s3-region string   AWS region
-  -base-path string   S3 base path (default "production")
+  -base-path string   S3 base path (default "development")
   -app-name string    Application name for S3 versioning
   -format string      Output format: text, json (default "text")
 ```
@@ -285,7 +295,7 @@ Options:
   -s3-bucket string   S3 bucket name
   -s3-key string      S3 key path
   -s3-region string   AWS region
-  -base-path string   S3 base path (default "production")
+  -base-path string   S3 base path (default "development")
   -app-name string    Application name
   -target string      Target directory to verify (default ".")
   -format string      Output format: text, json (default "text")
