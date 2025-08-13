@@ -21,7 +21,8 @@ Traditional tools like `tar` or file sync utilities (e.g., `rsync`) include meta
 2. **Immutable Exclude Rules**
    - Exclude patterns are set during manifest generation only
    - Cannot be modified during verification, preventing attackers from hiding changes
-   - Explicitly excludes NFS mounts and log files, while monitoring application dependencies (e.g., vendor directories)
+   - Only exclude server-generated files (logs, cache, uploads, NFS mounts)
+   - Application dependencies (vendor, node_modules) are monitored as they're part of the deployment
 
 3. **Secure Hash Storage with S3**
    - Deploy servers have write-only access
@@ -128,6 +129,10 @@ Configure your monitoring system to alert based on your requirements (e.g., aler
 
 ## Preset Examples
 
+These examples show common exclude patterns for various frameworks. **Important**: Only exclude files generated on the server (logs, cache, uploads). Application dependencies like `vendor` or `node_modules` MUST be monitored as they are part of the deployed application.
+
+For production use, replace `--output manifest.json` with S3 storage options (`--s3-bucket`, `--app-name`, `--base-path`).
+
 ### Laravel
 
 ```bash
@@ -144,9 +149,9 @@ kekkai generate \
 ```bash
 kekkai generate \
   --target /var/www/app \
-  --exclude "node_modules/.cache/**" \
-  --exclude "dist/**" \
   --exclude "*.log" \
+  --exclude ".npm/**" \
+  --exclude "tmp/**" \
   --output manifest.json
 ```
 
@@ -263,12 +268,12 @@ APP_NAME="myapp"
 DEPLOY_DIR="/var/www/app"
 S3_BUCKET="my-manifests"
 
-# 1. Deploy application
-rsync -av ./src/ ${DEPLOY_DIR}/
-
-# 2. Install dependencies
-cd ${DEPLOY_DIR}
+# 1. Install dependencies locally
+cd ./src
 composer install --no-dev
+
+# 2. Deploy application to server
+rsync -av ./src/ ${DEPLOY_DIR}/
 
 # 3. Generate manifest and save to S3 (single file)
 # Note: For production, explicitly specify --base-path production
@@ -296,10 +301,10 @@ Options:
   -output string      Output file, "-" for stdout (default "-")
   -exclude string     Exclude pattern (can be specified multiple times)
   -s3-bucket string   S3 bucket name
-  -s3-key string      S3 key path
+  -s3-key string      Custom S3 key path (rarely needed, use app-name instead)
   -s3-region string   AWS region
   -base-path string   S3 base path (default "development")
-  -app-name string    Application name for S3 versioning
+  -app-name string    Application name (creates path: {base-path}/{app-name}/manifest.json)
   -format string      Output format: text, json (default "text")
 ```
 
@@ -311,10 +316,10 @@ Verify file integrity.
 Options:
   -manifest string    Manifest file path
   -s3-bucket string   S3 bucket name
-  -s3-key string      S3 key path
+  -s3-key string      S3 key path (alternative to app-name for custom paths)
   -s3-region string   AWS region
   -base-path string   S3 base path (default "development")
-  -app-name string    Application name
+  -app-name string    Application name for automatic S3 path
   -target string      Target directory to verify (default ".")
   -format string      Output format: text, json (default "text")
 ```
