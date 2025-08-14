@@ -80,7 +80,7 @@ func (c *Calculator) CalculateDirectory(rootDir string, excludes []string) (*Res
 
 // collectFiles walks the directory and collects files based on patterns
 func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, error) {
-	var files []string
+	files := make([]string, 0, 50) // Start with capacity for 50 files
 
 	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -186,7 +186,7 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 	}()
 
 	// Collect results
-	var fileInfos []FileInfo
+	fileInfos := make([]FileInfo, 0, len(files)) // Pre-allocate based on file count
 	for result := range results {
 		fileInfos = append(fileInfos, result)
 	}
@@ -319,7 +319,7 @@ func VerifyIntegrity(manifest *Result, targetDir string) error {
 		currentMap[f.Path] = f.Hash
 	}
 
-	var issues []string
+	issues := make([]string, 0, 10) // Start with capacity for 10 issues
 
 	// Check for modified or deleted files
 	for path, expectedHash := range manifestMap {
@@ -378,7 +378,7 @@ func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, excludes []
 		currentMap[f.Path] = f.Hash
 	}
 
-	var issues []string
+	issues := make([]string, 0, 10) // Start with capacity for 10 issues
 
 	// Check for modified or deleted files
 	for path, expectedHash := range manifestMap {
