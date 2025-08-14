@@ -370,3 +370,24 @@ Note that application dependencies (vendor, node_modules) should still be verifi
 ### Q: System load is too high during verification
 
 A: Use `--rate-limit` to throttle I/O bandwidth. For example, `--rate-limit 10485760` limits to 10MB/s. This global rate limit is shared across all worker threads, preventing system overload while still allowing parallel processing.
+
+Alternatively, you can use systemd to control resource usage at the OS level:
+
+```bash
+# Run with limited CPU and I/O priority
+systemd-run --quiet --wait --collect \
+  -p Type=oneshot \
+  -p CPUQuota=25% -p CPUWeight=100 \
+  /bin/bash -lc 'nice -n 10 ionice -c2 -n7 /usr/local/bin/kekkai verify \
+    --s3-bucket my-manifests \
+    --app-name myapp \
+    --target /srv/app'
+```
+
+This approach provides more comprehensive resource control:
+- `CPUQuota=25%`: Limits CPU usage to 25%
+- `CPUWeight=100`: Sets CPU scheduling weight (lower priority)
+- `nice -n 10`: Lower process priority
+- `ionice -c2 -n7`: Best-effort I/O scheduling with lowest priority
+
+**Note**: With Go 1.25+, `CPUQuota` also automatically adjusts `GOMAXPROCS` to match the quota, so kekkai will use fewer worker threads when CPU is limited, providing better resource utilization.
