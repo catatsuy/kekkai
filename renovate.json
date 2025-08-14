@@ -3,6 +3,18 @@
   "extends": [
     "config:recommended"
   ],
+  "regexManagers": [
+    {
+      "fileMatch": [
+        ".github/workflows/security.yml"
+      ],
+      "datasourceTemplate": "golang-version",
+      "depNameTemplate": "golang",
+      "matchStrings": [
+        "go-version-input: (?<currentValue>[0-9]*.[0-9]*.[0-9]*)"
+      ]
+    }
+  ],
   "postUpdateOptions": [
     "gomodTidy",
     "gomodUpdateImportPaths"
