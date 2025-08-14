@@ -33,6 +33,13 @@ func NewGenerator(numWorkers int) *Generator {
 	}
 }
 
+// NewGeneratorWithRateLimit creates a manifest generator with rate limiting
+func NewGeneratorWithRateLimit(numWorkers int, bytesPerSec int64) *Generator {
+	return &Generator{
+		calculator: hash.NewCalculatorWithRateLimit(numWorkers, bytesPerSec),
+	}
+}
+
 // Generate creates a manifest for the specified directory
 func (g *Generator) Generate(targetDir string, excludes []string) (*Manifest, error) {
 	// Calculate hashes
@@ -114,6 +121,19 @@ func (m *Manifest) Verify(targetDir string, numWorkers int) error {
 	// Create calculator with specified workers
 	calculator := hash.NewCalculator(numWorkers)
 
+	return m.verifyWithCalculator(targetDir, calculator)
+}
+
+// VerifyWithRateLimit checks the integrity of files with rate limiting
+func (m *Manifest) VerifyWithRateLimit(targetDir string, numWorkers int, bytesPerSec int64) error {
+	// Create calculator with rate limiting
+	calculator := hash.NewCalculatorWithRateLimit(numWorkers, bytesPerSec)
+
+	return m.verifyWithCalculator(targetDir, calculator)
+}
+
+// verifyWithCalculator performs the actual verification with the provided calculator
+func (m *Manifest) verifyWithCalculator(targetDir string, calculator *hash.Calculator) error {
 	// Calculate current state with same patterns
 	currentResult, err := calculator.CalculateDirectory(targetDir, m.Excludes)
 	if err != nil {

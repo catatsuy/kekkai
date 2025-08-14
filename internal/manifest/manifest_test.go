@@ -401,6 +401,75 @@ func TestManifestExcludePatterns(t *testing.T) {
 	})
 }
 
+func TestGeneratorWithRateLimit(t *testing.T) {
+	// Create test directory
+	tempDir := createTestDirectory(t)
+	defer os.RemoveAll(tempDir)
+
+	// Test normal generator
+	generator1 := NewGenerator(2)
+	manifest1, err := generator1.Generate(tempDir, nil)
+	if err != nil {
+		t.Fatalf("Normal generator failed: %v", err)
+	}
+
+	// Test rate limited generator
+	generator2 := NewGeneratorWithRateLimit(2, 1024*1024) // 1MB/s
+	manifest2, err := generator2.Generate(tempDir, nil)
+	if err != nil {
+		t.Fatalf("Rate limited generator failed: %v", err)
+	}
+
+	// Results should be identical
+	if manifest1.TotalHash != manifest2.TotalHash {
+		t.Error("Rate limited generator should produce same hash")
+	}
+
+	if manifest1.FileCount != manifest2.FileCount {
+		t.Errorf("File count mismatch: %d vs %d", manifest1.FileCount, manifest2.FileCount)
+	}
+}
+
+func TestVerifyWithRateLimit(t *testing.T) {
+	// Create test directory
+	tempDir := createTestDirectory(t)
+	defer os.RemoveAll(tempDir)
+
+	// Generate manifest
+	generator := NewGenerator(0)
+	manifest, err := generator.Generate(tempDir, nil)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Test normal verify
+	err = manifest.Verify(tempDir, 0)
+	if err != nil {
+		t.Errorf("Normal verify should pass: %v", err)
+	}
+
+	// Test rate limited verify
+	err = manifest.VerifyWithRateLimit(tempDir, 0, 1024*1024) // 1MB/s
+	if err != nil {
+		t.Errorf("Rate limited verify should pass: %v", err)
+	}
+
+	// Modify a file
+	testFile := filepath.Join(tempDir, "test.txt")
+	err = os.WriteFile(testFile, []byte("modified content"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both should fail with modified file
+	err1 := manifest.Verify(tempDir, 0)
+	err2 := manifest.VerifyWithRateLimit(tempDir, 0, 1024*1024)
+
+	if err1 == nil || err2 == nil {
+		t.Error("Both verify methods should fail with modified file")
+	}
+}
+
 // Helper function to create a test directory with files
 func createTestDirectory(t *testing.T) string {
 	t.Helper()

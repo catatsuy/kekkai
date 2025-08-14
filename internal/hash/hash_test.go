@@ -687,6 +687,106 @@ func TestParallelCalculation(t *testing.T) {
 	}
 }
 
+func TestRateLimitedCalculation(t *testing.T) {
+	// Create test directory with files
+	tempDir, err := os.MkdirTemp("", "test-rate-limit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a few files
+	testFiles := map[string]string{
+		"small.txt":  "small content",
+		"medium.txt": strings.Repeat("medium content ", 100),
+		"large.txt":  strings.Repeat("large content ", 1000),
+	}
+
+	for filename, content := range testFiles {
+		path := filepath.Join(tempDir, filename)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Test without rate limit
+	calcNormal := NewCalculator(2)
+	result1, err := calcNormal.CalculateDirectory(tempDir, nil)
+	if err != nil {
+		t.Fatalf("Normal calculation failed: %v", err)
+	}
+
+	// Test with rate limit (1MB/s)
+	calcRateLimit := NewCalculatorWithRateLimit(2, 1024*1024)
+	result2, err := calcRateLimit.CalculateDirectory(tempDir, nil)
+	if err != nil {
+		t.Fatalf("Rate limited calculation failed: %v", err)
+	}
+
+	// Results should be identical
+	if result1.TotalHash != result2.TotalHash {
+		t.Error("Rate limited calculation should produce same hash")
+	}
+
+	if result1.FileCount != result2.FileCount {
+		t.Errorf("File count mismatch: %d vs %d", result1.FileCount, result2.FileCount)
+	}
+}
+
+func TestNewCalculatorWithRateLimit(t *testing.T) {
+	tests := []struct {
+		name          string
+		numWorkers    int
+		bytesPerSec   int64
+		expectWorkers int
+		expectLimit   bool
+	}{
+		{
+			name:          "with rate limit",
+			numWorkers:    4,
+			bytesPerSec:   1024 * 1024, // 1MB/s
+			expectWorkers: 4,
+			expectLimit:   true,
+		},
+		{
+			name:          "no rate limit",
+			numWorkers:    2,
+			bytesPerSec:   0,
+			expectWorkers: 2,
+			expectLimit:   false,
+		},
+		{
+			name:          "auto workers with rate limit",
+			numWorkers:    0,
+			bytesPerSec:   512 * 1024, // 512KB/s
+			expectWorkers: runtime.GOMAXPROCS(0),
+			expectLimit:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calc := NewCalculatorWithRateLimit(tt.numWorkers, tt.bytesPerSec)
+
+			if calc.numWorkers != tt.expectWorkers {
+				t.Errorf("numWorkers = %d, want %d", calc.numWorkers, tt.expectWorkers)
+			}
+
+			if calc.bytesPerSec != tt.bytesPerSec {
+				t.Errorf("bytesPerSec = %d, want %d", calc.bytesPerSec, tt.bytesPerSec)
+			}
+
+			if tt.expectLimit && calc.limiter == nil {
+				t.Error("Expected limiter to be created")
+			}
+
+			if !tt.expectLimit && calc.limiter != nil {
+				t.Error("Expected no limiter")
+			}
+		})
+	}
+}
+
 // Helper functions
 
 func copyTestData(t *testing.T, src, dst string) {

@@ -90,15 +90,16 @@ func (c *CLI) runGenerate(args []string) int {
 	var (
 		excludes arrayFlags
 
-		target   string
-		output   string
-		s3Bucket string
-		s3Region string
-		basePath string
-		appName  string
-		format   string
-		workers  int
-		help     bool
+		target    string
+		output    string
+		s3Bucket  string
+		s3Region  string
+		basePath  string
+		appName   string
+		format    string
+		workers   int
+		rateLimit int64
+		help      bool
 	)
 
 	flags := flag.NewFlagSet("generate", flag.ContinueOnError)
@@ -112,6 +113,7 @@ func (c *CLI) runGenerate(args []string) int {
 	flags.StringVar(&appName, "app-name", "", "Application name for S3 versioning")
 	flags.StringVar(&format, "format", "text", "Output format (text|json)")
 	flags.IntVar(&workers, "workers", 0, "Number of worker threads (0 = auto detect)")
+	flags.Int64Var(&rateLimit, "rate-limit", 0, "Rate limit in bytes per second (0 = no limit)")
 	flags.BoolVar(&help, "help", false, "Show help for generate command")
 	flags.BoolVar(&help, "h", false, "Show help for generate command")
 
@@ -128,7 +130,13 @@ func (c *CLI) runGenerate(args []string) int {
 	}
 
 	// Generate manifest
-	generator := manifest.NewGenerator(workers)
+	var generator *manifest.Generator
+	if rateLimit > 0 {
+		generator = manifest.NewGeneratorWithRateLimit(workers, rateLimit)
+	} else {
+		generator = manifest.NewGenerator(workers)
+	}
+
 	m, err := generator.Generate(target, excludes)
 	if err != nil {
 		c.outputGenerateError(err, format)
@@ -196,6 +204,7 @@ func (c *CLI) runVerify(args []string) int {
 		target       string
 		format       string
 		workers      int
+		rateLimit    int64
 		help         bool
 	)
 
@@ -210,6 +219,7 @@ func (c *CLI) runVerify(args []string) int {
 	flags.StringVar(&target, "target", ".", "Target directory to verify")
 	flags.StringVar(&format, "format", "text", "Output format (text|json)")
 	flags.IntVar(&workers, "workers", 0, "Number of worker threads (0 = auto detect)")
+	flags.Int64Var(&rateLimit, "rate-limit", 0, "Rate limit in bytes per second (0 = no limit)")
 	flags.BoolVar(&help, "help", false, "Show help for verify command")
 	flags.BoolVar(&help, "h", false, "Show help for verify command")
 
@@ -259,7 +269,11 @@ func (c *CLI) runVerify(args []string) int {
 	}
 
 	// Verify integrity
-	err = m.Verify(target, workers)
+	if rateLimit > 0 {
+		err = m.VerifyWithRateLimit(target, workers, rateLimit)
+	} else {
+		err = m.Verify(target, workers)
+	}
 
 	// Output result
 	c.outputVerifyResult(err, m, format)
