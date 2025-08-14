@@ -90,7 +90,7 @@ kekkai generate \
 
 #### Using S3 Storage
 
-Kekkai stores manifests in S3 for secure, centralized management. Each deployment updates the same `manifest.json` file, with S3's built-in versioning maintaining the history.
+Kekkai stores manifests in S3 for secure, centralized management. Each deployment updates the same `manifest.json` file.
 
 ```bash
 # For production deployment (must explicitly specify --base-path)
@@ -118,7 +118,6 @@ kekkai verify \
 **Benefits:**
 - **Lower S3 costs** - Minimal S3 operations
 - **Clean structure** - One manifest file per application
-- **Automatic history** - S3 versioning tracks all changes
 
 #### Monitoring Integration
 
@@ -224,10 +223,10 @@ For production server (read-only):
 
 ### S3 Bucket Setup
 
-**Important:** S3 versioning must be enabled for history tracking.
+**Recommended:** Enable S3 versioning to maintain history of manifest changes.
 
 ```bash
-# Enable versioning for history tracking
+# Optional: Enable versioning for history tracking
 aws s3api put-bucket-versioning \
   --bucket my-manifests \
   --versioning-configuration Status=Enabled
