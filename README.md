@@ -197,8 +197,7 @@ For deployment server (write access):
     {
       "Effect": "Allow",
       "Action": [
-        "s3:PutObject",
-        "s3:PutObjectAcl"
+        "s3:PutObject"
       ],
       "Resource": "arn:aws:s3:::my-manifests/*"
     }
