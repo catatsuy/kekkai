@@ -97,6 +97,7 @@ func (c *CLI) runGenerate(args []string) int {
 		basePath string
 		appName  string
 		format   string
+		workers  int
 		help     bool
 	)
 
@@ -110,6 +111,7 @@ func (c *CLI) runGenerate(args []string) int {
 	flags.StringVar(&basePath, "base-path", "development", "Base path for S3 (e.g., production, staging, development)")
 	flags.StringVar(&appName, "app-name", "", "Application name for S3 versioning")
 	flags.StringVar(&format, "format", "text", "Output format (text|json)")
+	flags.IntVar(&workers, "workers", 0, "Number of worker threads (0 = auto detect)")
 	flags.BoolVar(&help, "help", false, "Show help for generate command")
 	flags.BoolVar(&help, "h", false, "Show help for generate command")
 
@@ -126,7 +128,7 @@ func (c *CLI) runGenerate(args []string) int {
 	}
 
 	// Generate manifest
-	generator := manifest.NewGenerator()
+	generator := manifest.NewGenerator(workers)
 	m, err := generator.Generate(target, excludes)
 	if err != nil {
 		c.outputGenerateError(err, format)
@@ -193,6 +195,7 @@ func (c *CLI) runVerify(args []string) int {
 		appName      string
 		target       string
 		format       string
+		workers      int
 		help         bool
 	)
 
@@ -206,6 +209,7 @@ func (c *CLI) runVerify(args []string) int {
 	flags.StringVar(&appName, "app-name", "", "Application name for S3")
 	flags.StringVar(&target, "target", ".", "Target directory to verify")
 	flags.StringVar(&format, "format", "text", "Output format (text|json)")
+	flags.IntVar(&workers, "workers", 0, "Number of worker threads (0 = auto detect)")
 	flags.BoolVar(&help, "help", false, "Show help for verify command")
 	flags.BoolVar(&help, "h", false, "Show help for verify command")
 
@@ -255,7 +259,7 @@ func (c *CLI) runVerify(args []string) int {
 	}
 
 	// Verify integrity
-	err = m.Verify(target)
+	err = m.Verify(target, workers)
 
 	// Output result
 	c.outputVerifyResult(err, m, format)

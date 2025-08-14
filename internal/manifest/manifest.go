@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/catatsuy/kekkai/internal/hash"
@@ -25,10 +26,10 @@ type Generator struct {
 	calculator *hash.Calculator
 }
 
-// NewGenerator creates a new manifest generator
-func NewGenerator() *Generator {
+// NewGenerator creates a manifest generator with custom worker count
+func NewGenerator(numWorkers int) *Generator {
 	return &Generator{
-		calculator: hash.NewCalculator(),
+		calculator: hash.NewCalculator(numWorkers),
 	}
 }
 
@@ -108,16 +109,58 @@ func LoadFromReader(r io.Reader) (*Manifest, error) {
 	return &manifest, nil
 }
 
-// Verify checks the integrity of files against this manifest
-func (m *Manifest) Verify(targetDir string) error {
-	// Convert to hash.Result for verification
-	result := &hash.Result{
-		TotalHash: m.TotalHash,
-		Files:     m.Files,
-		FileCount: m.FileCount,
+// Verify checks the integrity of files using specified worker count
+func (m *Manifest) Verify(targetDir string, numWorkers int) error {
+	// Create calculator with specified workers
+	calculator := hash.NewCalculator(numWorkers)
+
+	// Calculate current state with same patterns
+	currentResult, err := calculator.CalculateDirectory(targetDir, m.Excludes)
+	if err != nil {
+		return fmt.Errorf("failed to calculate current state: %w", err)
 	}
 
-	return hash.VerifyIntegrityWithPatterns(result, targetDir, m.Excludes)
+	// Quick check with total hash
+	if m.TotalHash == currentResult.TotalHash {
+		return nil // All files are intact
+	}
+
+	// Detailed comparison
+	manifestMap := make(map[string]string)
+	for _, f := range m.Files {
+		manifestMap[f.Path] = f.Hash
+	}
+
+	currentMap := make(map[string]string)
+	for _, f := range currentResult.Files {
+		currentMap[f.Path] = f.Hash
+	}
+
+	issues := make([]string, 0, 10)
+
+	// Check for modified or deleted files
+	for path, expectedHash := range manifestMap {
+		if actualHash, exists := currentMap[path]; exists {
+			if expectedHash != actualHash {
+				issues = append(issues, fmt.Sprintf("modified: %s", path))
+			}
+		} else {
+			issues = append(issues, fmt.Sprintf("deleted: %s", path))
+		}
+	}
+
+	// Check for added files
+	for path := range currentMap {
+		if _, exists := manifestMap[path]; !exists {
+			issues = append(issues, fmt.Sprintf("added: %s", path))
+		}
+	}
+
+	if len(issues) > 0 {
+		return fmt.Errorf("integrity check failed:\n%s", strings.Join(issues, "\n"))
+	}
+
+	return nil
 }
 
 // GetSummary returns a summary of the manifest

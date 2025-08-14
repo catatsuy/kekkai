@@ -36,11 +36,15 @@ type Calculator struct {
 	bufferSize int
 }
 
-// NewCalculator creates a new hash calculator
-func NewCalculator() *Calculator {
+// NewCalculator creates a calculator with custom worker count
+func NewCalculator(numWorkers int) *Calculator {
+	if numWorkers <= 0 {
+		numWorkers = runtime.GOMAXPROCS(0)
+	}
+
 	return &Calculator{
-		numWorkers: runtime.GOMAXPROCS(0), // Use all available CPUs
-		bufferSize: 1024 * 1024,           // 1MB buffer
+		numWorkers: numWorkers,
+		bufferSize: 1024 * 1024, // 1MB buffer
 	}
 }
 
@@ -293,7 +297,7 @@ func matchGlob(pattern, path string) bool {
 
 // VerifyIntegrity verifies the integrity of files against a manifest
 func VerifyIntegrity(manifest *Result, targetDir string) error {
-	calculator := NewCalculator()
+	calculator := NewCalculator(0)
 
 	// Resolve symlink if the target directory itself is a symlink
 	resolvedDir, err := filepath.EvalSymlinks(targetDir)
@@ -352,7 +356,7 @@ func VerifyIntegrity(manifest *Result, targetDir string) error {
 
 // VerifyIntegrityWithPatterns verifies the integrity of files against a manifest with patterns
 func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, excludes []string) error {
-	calculator := NewCalculator()
+	calculator := NewCalculator(0)
 
 	// Resolve symlink if the target directory itself is a symlink
 	resolvedDir, err := filepath.EvalSymlinks(targetDir)
