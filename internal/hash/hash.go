@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"golang.org/x/time/rate"
 )
 
 // FileInfo represents information about a single file or symlink
@@ -32,8 +35,29 @@ type Result struct {
 
 // Calculator handles hash calculation for files and directories
 type Calculator struct {
-	numWorkers int
-	bufferSize int
+	numWorkers  int
+	bufferSize  int
+	bytesPerSec int64         // Rate limit in bytes per second (0 = no limit)
+	limiter     *rate.Limiter // Shared rate limiter for all workers
+}
+
+// throttledReader wraps an io.Reader with rate limiting
+type throttledReader struct {
+	r        io.Reader
+	limiter  *rate.Limiter
+	maxChunk int
+}
+
+func (t *throttledReader) Read(p []byte) (int, error) {
+	n := len(p)
+	if n > t.maxChunk {
+		n = t.maxChunk
+	}
+	// Reserve tokens before reading
+	if err := t.limiter.WaitN(context.Background(), n); err != nil {
+		return 0, err
+	}
+	return t.r.Read(p[:n])
 }
 
 // NewCalculator creates a calculator with custom worker count
@@ -43,8 +67,33 @@ func NewCalculator(numWorkers int) *Calculator {
 	}
 
 	return &Calculator{
-		numWorkers: numWorkers,
-		bufferSize: 1024 * 1024, // 1MB buffer
+		numWorkers:  numWorkers,
+		bufferSize:  1024 * 1024, // 1MB buffer
+		bytesPerSec: 0,           // No rate limit by default
+	}
+}
+
+// NewCalculatorWithRateLimit creates a calculator with rate limiting
+func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
+	if numWorkers <= 0 {
+		numWorkers = runtime.GOMAXPROCS(0)
+	}
+
+	var limiter *rate.Limiter
+	if bytesPerSec > 0 {
+		// Create rate limiter with burst equal to buffer size or 1MB, whichever is smaller
+		burstSize := int(bytesPerSec)
+		if burstSize > 1024*1024 {
+			burstSize = 1024 * 1024 // Max 1MB burst
+		}
+		limiter = rate.NewLimiter(rate.Limit(bytesPerSec), burstSize)
+	}
+
+	return &Calculator{
+		numWorkers:  numWorkers,
+		bufferSize:  1024 * 1024, // 1MB buffer
+		bytesPerSec: bytesPerSec,
+		limiter:     limiter,
 	}
 }
 
@@ -222,17 +271,26 @@ func (c *Calculator) hashFileWithHasher(path string, hasher hash.Hash, buf []byt
 
 	hasher.Reset()
 
-	for {
-		n, err := file.Read(buf)
-		if n > 0 {
-			hasher.Write(buf[:n])
+	var reader io.Reader = file
+	if c.bytesPerSec > 0 && c.limiter != nil {
+		// Limit chunk size to avoid burst issues
+		maxChunk := len(buf)
+		if int64(maxChunk) > c.bytesPerSec {
+			maxChunk = int(c.bytesPerSec)
 		}
-		if err == io.EOF {
-			break
+		if maxChunk > 64*1024 {
+			maxChunk = 64 * 1024 // Max 64KB chunks
 		}
-		if err != nil {
-			return "", err
+
+		reader = &throttledReader{
+			r:        file,
+			limiter:  c.limiter,
+			maxChunk: maxChunk,
 		}
+	}
+
+	if _, err := io.CopyBuffer(hasher, reader, buf); err != nil {
+		return "", err
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil

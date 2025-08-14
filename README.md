@@ -306,6 +306,7 @@ Options:
   -app-name string    Application name (creates path: {base-path}/{app-name}/manifest.json)
   -format string      Output format: text, json (default "text")
   -workers int        Number of worker threads (0 = auto detect)
+  -rate-limit int     Rate limit in bytes per second (0 = no limit)
 ```
 
 ### verify
@@ -322,6 +323,7 @@ Options:
   -target string      Target directory to verify (default ".")
   -format string      Output format: text, json (default "text")
   -workers int        Number of worker threads (0 = auto detect)
+  -rate-limit int     Rate limit in bytes per second (0 = no limit)
 ```
 
 ## Output Formats
@@ -359,4 +361,12 @@ A: Verify that the EC2 instance has the correct IAM role configured. Also check 
 
 ### Q: Verification takes too long
 
-A: For large file sets, use `--exclude` options to skip server-generated directories like logs, cache, and temporary files. You can also adjust the number of worker threads with `--workers` to optimize performance for your system. Note that application dependencies (vendor, node_modules) should still be verified as they are part of the deployed application.
+A: For large file sets, use `--exclude` options to skip server-generated directories like logs, cache, and temporary files. You can also optimize performance with:
+- `--workers N`: Adjust the number of worker threads for your system
+- `--rate-limit N`: Limit I/O throughput (bytes per second) to reduce system load
+
+Note that application dependencies (vendor, node_modules) should still be verified as they are part of the deployed application.
+
+### Q: System load is too high during verification
+
+A: Use `--rate-limit` to throttle I/O bandwidth. For example, `--rate-limit 10485760` limits to 10MB/s. This global rate limit is shared across all worker threads, preventing system overload while still allowing parallel processing.
