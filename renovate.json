@@ -3,10 +3,11 @@
   "extends": [
     "config:recommended"
   ],
-  "regexManagers": [
+  "customManagers": [
     {
-      "fileMatch": [
-        ".github/workflows/security.yml"
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/.github/workflows/security.yml/"
       ],
       "datasourceTemplate": "golang-version",
       "depNameTemplate": "golang",
