@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,13 +50,15 @@ func TestCalculateFileHash(t *testing.T) {
 
 			// Calculate hash
 			calc := NewCalculator()
-			hash, err := calc.hashFile(tmpfile.Name())
+			hasher := sha256.New()
+			buf := make([]byte, calc.bufferSize)
+			hash, err := calc.hashFileWithHasher(tmpfile.Name(), hasher, buf)
 			if err != nil {
-				t.Fatalf("hashFile() error = %v", err)
+				t.Fatalf("hashFileWithHasher() error = %v", err)
 			}
 
 			if hash != tt.expected {
-				t.Errorf("hashFile() = %v, want %v", hash, tt.expected)
+				t.Errorf("hashFileWithHasher() = %v, want %v", hash, tt.expected)
 			}
 		})
 	}

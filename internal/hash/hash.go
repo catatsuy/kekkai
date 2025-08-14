@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -123,6 +124,10 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 	// Start workers
 	for i := 0; i < c.numWorkers; i++ {
 		wg.Go(func() {
+			// Create reusable hasher and buffer for this worker
+			hasher := sha256.New()
+			buf := make([]byte, c.bufferSize)
+
 			for path := range jobs {
 				info, err := os.Lstat(path) // Use Lstat to get symlink info
 				if err != nil {
@@ -143,7 +148,7 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 
 					// Create a hash based on the symlink target path
 					// This ensures changes to symlink targets are detected
-					hasher := sha256.New()
+					hasher.Reset()
 					hasher.Write([]byte("symlink:" + target))
 					hash := hex.EncodeToString(hasher.Sum(nil))
 
@@ -156,7 +161,7 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 					}
 				} else {
 					// Regular file
-					hash, err := c.hashFile(path)
+					hash, err := c.hashFileWithHasher(path, hasher, buf)
 					if err != nil {
 						errors <- fmt.Errorf("failed to hash %s: %w", path, err)
 						continue
@@ -203,16 +208,15 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 	return fileInfos, nil
 }
 
-// hashFile calculates SHA256 hash of a file
-func (c *Calculator) hashFile(path string) (string, error) {
+// hashFileWithHasher calculates hash of a file using provided hasher and buffer (for reuse)
+func (c *Calculator) hashFileWithHasher(path string, hasher hash.Hash, buf []byte) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
-	hasher := sha256.New()
-	buf := make([]byte, c.bufferSize)
+	hasher.Reset()
 
 	for {
 		n, err := file.Read(buf)
