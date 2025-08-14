@@ -18,7 +18,7 @@ func TestGenerateManifest(t *testing.T) {
 	tempDir := createTestDirectory(t)
 	defer os.RemoveAll(tempDir)
 
-	generator := NewGenerator()
+	generator := NewGenerator(0)
 	manifest, err := generator.Generate(tempDir, nil)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
@@ -167,14 +167,14 @@ func TestManifestVerify(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Generate manifest
-	generator := NewGenerator()
+	generator := NewGenerator(0)
 	manifest, err := generator.Generate(tempDir, nil)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
 	// Verify should pass
-	err = manifest.Verify(tempDir)
+	err = manifest.Verify(tempDir, 0)
 	if err != nil {
 		t.Errorf("Verify() should pass for unchanged files: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestManifestVerify(t *testing.T) {
 	}
 
 	// Verify should fail
-	err = manifest.Verify(tempDir)
+	err = manifest.Verify(tempDir, 0)
 	if err == nil {
 		t.Error("Verify() should fail for modified files")
 	}
@@ -267,7 +267,7 @@ func TestManifestWithPatterns(t *testing.T) {
 		},
 	}
 
-	generator := NewGenerator()
+	generator := NewGenerator(0)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -305,7 +305,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 	}
 
 	// Generate manifest with excludes
-	generator := NewGenerator()
+	generator := NewGenerator(0)
 	excludes := []string{"*.log", ".env"}
 	manifest, err := generator.Generate(tempDir, excludes)
 	if err != nil {
@@ -326,7 +326,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 
 	// Test manifest.Verify() uses excludes correctly
 	t.Run("verify with original files", func(t *testing.T) {
-		err := manifest.Verify(tempDir)
+		err := manifest.Verify(tempDir, 0)
 		if err != nil {
 			t.Errorf("Verify() should succeed with original files: %v", err)
 		}
@@ -340,7 +340,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should still pass because the file is excluded
-		err := manifest.Verify(tempDir)
+		err := manifest.Verify(tempDir, 0)
 		if err != nil {
 			t.Errorf("Verify() should succeed even with modified excluded file: %v", err)
 		}
@@ -354,7 +354,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should still pass because the file matches exclude pattern
-		err := manifest.Verify(tempDir)
+		err := manifest.Verify(tempDir, 0)
 		if err != nil {
 			t.Errorf("Verify() should succeed even with added excluded file: %v", err)
 		}
@@ -368,7 +368,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should fail because the file is included
-		err := manifest.Verify(tempDir)
+		err := manifest.Verify(tempDir, 0)
 		if err == nil {
 			t.Error("Verify() should fail with modified included file")
 		} else if !strings.Contains(err.Error(), "modified: app.go") {
@@ -389,7 +389,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should fail because the file is not excluded
-		err := manifest.Verify(tempDir)
+		err := manifest.Verify(tempDir, 0)
 		if err == nil {
 			t.Error("Verify() should fail with added included file")
 		} else if !strings.Contains(err.Error(), "added: new.go") {

@@ -5,9 +5,44 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestNewCalculator(t *testing.T) {
+	tests := []struct {
+		name            string
+		numWorkers      int
+		expectedWorkers int
+	}{
+		{
+			name:            "positive worker count",
+			numWorkers:      4,
+			expectedWorkers: 4,
+		},
+		{
+			name:            "zero worker count defaults to GOMAXPROCS",
+			numWorkers:      0,
+			expectedWorkers: runtime.GOMAXPROCS(0),
+		},
+		{
+			name:            "negative worker count defaults to GOMAXPROCS",
+			numWorkers:      -1,
+			expectedWorkers: runtime.GOMAXPROCS(0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calc := NewCalculator(tt.numWorkers)
+			if calc.numWorkers != tt.expectedWorkers {
+				t.Errorf("NewCalculator(%d) numWorkers = %d, want %d",
+					tt.numWorkers, calc.numWorkers, tt.expectedWorkers)
+			}
+		})
+	}
+}
 
 func TestCalculateFileHash(t *testing.T) {
 	tests := []struct {
@@ -49,7 +84,7 @@ func TestCalculateFileHash(t *testing.T) {
 			}
 
 			// Calculate hash
-			calc := NewCalculator()
+			calc := NewCalculator(0)
 			hasher := sha256.New()
 			buf := make([]byte, calc.bufferSize)
 			hash, err := calc.hashFileWithHasher(tmpfile.Name(), hasher, buf)
@@ -65,7 +100,7 @@ func TestCalculateFileHash(t *testing.T) {
 }
 
 func TestCalculateDirectory(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(0)
 
 	// Test with testdata directory
 	result, err := calc.CalculateDirectory("testdata/sample", nil)
@@ -104,7 +139,7 @@ func TestCalculateDirectory(t *testing.T) {
 }
 
 func TestCalculateDirectoryWithPatterns(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(0)
 
 	tests := []struct {
 		name         string
@@ -241,7 +276,7 @@ func TestMatchExcludePatterns(t *testing.T) {
 }
 
 func TestVerifyIntegrity(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(0)
 
 	// Generate initial manifest
 	manifest, err := calc.CalculateDirectory("testdata/sample", nil)
@@ -290,7 +325,7 @@ func TestVerifyIntegrity(t *testing.T) {
 }
 
 func TestVerifyIntegrityWithPatterns(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(0)
 
 	// Create test directory
 	tempDir, err := os.MkdirTemp("", "test-verify-patterns")
@@ -415,7 +450,7 @@ func TestVerifyIntegrityWithPatterns(t *testing.T) {
 }
 
 func TestSymlinkSecurity(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(0)
 
 	t.Run("detect symlink manipulation", func(t *testing.T) {
 		// Create test directory structure
@@ -519,7 +554,7 @@ func TestSymlinkSecurity(t *testing.T) {
 }
 
 func TestSymlinkHandling(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(0)
 
 	t.Run("directory symlink as target", func(t *testing.T) {
 		// Calculate hash for the real directory
@@ -612,7 +647,7 @@ func TestSymlinkHandling(t *testing.T) {
 }
 
 func TestParallelCalculation(t *testing.T) {
-	calc := NewCalculator()
+	calc := NewCalculator(0)
 	calc.numWorkers = 4 // Use multiple workers
 
 	// Create a directory with multiple files
