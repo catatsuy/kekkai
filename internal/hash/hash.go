@@ -206,9 +206,12 @@ func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, 
 // calculateFileHashes calculates hashes for multiple files in parallel
 func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, files []string) ([]FileInfo, error) {
 	var wg sync.WaitGroup
-	jobs := make(chan string, len(files))
-	results := make(chan FileInfo, len(files))
-	errors := make(chan error, len(files))
+	// Use smaller buffer sizes to avoid excessive memory usage with large directories
+	// Buffer size is min(numWorkers * 2, 100) to balance between performance and memory
+	bufferSize := min(c.numWorkers*2, 100)
+	jobs := make(chan string, bufferSize)
+	results := make(chan FileInfo, bufferSize)
+	errors := make(chan error, bufferSize)
 
 	// Start workers
 	for i := 0; i < c.numWorkers; i++ {
