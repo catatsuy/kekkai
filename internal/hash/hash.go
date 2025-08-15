@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -41,23 +42,58 @@ type Calculator struct {
 	limiter     *rate.Limiter // Shared rate limiter for all workers
 }
 
-// throttledReader wraps an io.Reader with rate limiting
-type throttledReader struct {
-	r        io.Reader
-	limiter  *rate.Limiter
-	maxChunk int
-}
+// throttledCopy performs io.CopyBuffer with rate limiting
+func throttledCopy(ctx context.Context, dst io.Writer, src io.Reader, buf []byte, limiter *rate.Limiter, bytesPerSec int64) (int64, error) {
+	maxChunk := len(buf)
+	if int64(maxChunk) > bytesPerSec {
+		maxChunk = int(bytesPerSec)
+	}
+	if maxChunk > 64*1024 {
+		maxChunk = 64 * 1024
+	}
 
-func (t *throttledReader) Read(p []byte) (int, error) {
-	n := len(p)
-	if n > t.maxChunk {
-		n = t.maxChunk
+	var written int64
+	for {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return written, ctx.Err()
+		default:
+		}
+
+		// Read with limited chunk size
+		nr := maxChunk
+		if nr > len(buf) {
+			nr = len(buf)
+		}
+
+		// Wait for rate limit
+		if err := limiter.WaitN(ctx, nr); err != nil {
+			return written, err
+		}
+
+		// Read from source
+		readBytes, readErr := src.Read(buf[:nr])
+		if readBytes > 0 {
+			// Write to destination
+			writtenBytes, writeErr := dst.Write(buf[0:readBytes])
+			if writtenBytes > 0 {
+				written += int64(writtenBytes)
+			}
+			if writeErr != nil {
+				return written, writeErr
+			}
+			if readBytes != writtenBytes {
+				return written, io.ErrShortWrite
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return written, nil
+			}
+			return written, readErr
+		}
 	}
-	// Reserve tokens before reading
-	if err := t.limiter.WaitN(context.Background(), n); err != nil {
-		return 0, err
-	}
-	return t.r.Read(p[:n])
 }
 
 // NewCalculator creates a calculator with custom worker count
@@ -97,8 +133,8 @@ func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
 	}
 }
 
-// CalculateDirectory calculates hash for all files in a directory
-func (c *Calculator) CalculateDirectory(rootDir string, excludes []string) (*Result, error) {
+// CalculateDirectory calculates hash for all files in a directory with context
+func (c *Calculator) CalculateDirectory(ctx context.Context, rootDir string, excludes []string) (*Result, error) {
 	// Resolve symlink if the target directory itself is a symlink
 	resolvedDir, err := filepath.EvalSymlinks(rootDir)
 	if err != nil {
@@ -112,7 +148,7 @@ func (c *Calculator) CalculateDirectory(rootDir string, excludes []string) (*Res
 	}
 
 	// Calculate hashes in parallel
-	fileInfos, err := c.calculateFileHashes(resolvedDir, files)
+	fileInfos, err := c.calculateFileHashes(ctx, resolvedDir, files)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate file hashes: %w", err)
 	}
@@ -168,7 +204,7 @@ func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, 
 }
 
 // calculateFileHashes calculates hashes for multiple files in parallel
-func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]FileInfo, error) {
+func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, files []string) ([]FileInfo, error) {
 	var wg sync.WaitGroup
 	jobs := make(chan string, len(files))
 	results := make(chan FileInfo, len(files))
@@ -181,49 +217,58 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 			hasher := sha256.New()
 			buf := make([]byte, c.bufferSize)
 
-			for path := range jobs {
-				info, err := os.Lstat(path) // Use Lstat to get symlink info
-				if err != nil {
-					errors <- fmt.Errorf("failed to stat %s: %w", path, err)
-					continue
-				}
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case path, ok := <-jobs:
+					if !ok {
+						return
+					}
 
-				relPath, _ := filepath.Rel(rootDir, path)
-				relPath = filepath.ToSlash(relPath)
-
-				// Handle symlinks
-				if info.Mode()&os.ModeSymlink != 0 {
-					target, err := os.Readlink(path)
+					info, err := os.Lstat(path) // Use Lstat to get symlink info
 					if err != nil {
-						errors <- fmt.Errorf("failed to read symlink %s: %w", path, err)
+						errors <- fmt.Errorf("failed to stat %s: %w", path, err)
 						continue
 					}
 
-					// Create a hash based on the symlink target path
-					// This ensures changes to symlink targets are detected
-					hasher.Reset()
-					hasher.Write([]byte("symlink:" + target))
-					hash := hex.EncodeToString(hasher.Sum(nil))
+					relPath, _ := filepath.Rel(rootDir, path)
+					relPath = filepath.ToSlash(relPath)
 
-					results <- FileInfo{
-						Path:       relPath,
-						Hash:       hash,
-						Size:       0,
-						IsSymlink:  true,
-						LinkTarget: target,
-					}
-				} else {
-					// Regular file
-					hash, err := c.hashFileWithHasher(path, hasher, buf)
-					if err != nil {
-						errors <- fmt.Errorf("failed to hash %s: %w", path, err)
-						continue
-					}
+					// Handle symlinks
+					if info.Mode()&os.ModeSymlink != 0 {
+						target, err := os.Readlink(path)
+						if err != nil {
+							errors <- fmt.Errorf("failed to read symlink %s: %w", path, err)
+							continue
+						}
 
-					results <- FileInfo{
-						Path: relPath,
-						Hash: hash,
-						Size: info.Size(),
+						// Create a hash based on the symlink target path
+						// This ensures changes to symlink targets are detected
+						hasher.Reset()
+						hasher.Write([]byte("symlink:" + target))
+						hash := hex.EncodeToString(hasher.Sum(nil))
+
+						results <- FileInfo{
+							Path:       relPath,
+							Hash:       hash,
+							Size:       0,
+							IsSymlink:  true,
+							LinkTarget: target,
+						}
+					} else {
+						// Regular file
+						hash, err := c.hashFileWithHasher(ctx, path, hasher, buf)
+						if err != nil {
+							errors <- fmt.Errorf("failed to hash %s: %w", path, err)
+							continue
+						}
+
+						results <- FileInfo{
+							Path: relPath,
+							Hash: hash,
+							Size: info.Size(),
+						}
 					}
 				}
 			}
@@ -231,10 +276,17 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 	}
 
 	// Send jobs
-	for _, file := range files {
-		jobs <- file
-	}
-	close(jobs)
+	go func() {
+		for _, file := range files {
+			select {
+			case <-ctx.Done():
+				close(jobs)
+				return
+			case jobs <- file:
+			}
+		}
+		close(jobs)
+	}()
 
 	// Wait for completion
 	go func() {
@@ -243,26 +295,32 @@ func (c *Calculator) calculateFileHashes(rootDir string, files []string) ([]File
 		close(errors)
 	}()
 
-	// Collect results
+	// Collect results and errors
 	fileInfos := make([]FileInfo, 0, len(files)) // Pre-allocate based on file count
+	var collectedErrors []error
+
+	// Collect all results
 	for result := range results {
 		fileInfos = append(fileInfos, result)
 	}
 
-	// Check for errors
-	select {
-	case err := <-errors:
+	// Collect all errors
+	for err := range errors {
 		if err != nil {
-			return nil, err
+			collectedErrors = append(collectedErrors, err)
 		}
-	default:
+	}
+
+	// Return first error if any
+	if len(collectedErrors) > 0 {
+		return nil, collectedErrors[0]
 	}
 
 	return fileInfos, nil
 }
 
 // hashFileWithHasher calculates hash of a file using provided hasher and buffer (for reuse)
-func (c *Calculator) hashFileWithHasher(path string, hasher hash.Hash, buf []byte) (string, error) {
+func (c *Calculator) hashFileWithHasher(ctx context.Context, path string, hasher hash.Hash, buf []byte) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -271,25 +329,15 @@ func (c *Calculator) hashFileWithHasher(path string, hasher hash.Hash, buf []byt
 
 	hasher.Reset()
 
-	var reader io.Reader = file
 	if c.bytesPerSec > 0 && c.limiter != nil {
-		// Limit chunk size to avoid burst issues
-		maxChunk := len(buf)
-		if int64(maxChunk) > c.bytesPerSec {
-			maxChunk = int(c.bytesPerSec)
-		}
-		if maxChunk > 64*1024 {
-			maxChunk = 64 * 1024 // Max 64KB chunks
-		}
-
-		reader = &throttledReader{
-			r:        file,
-			limiter:  c.limiter,
-			maxChunk: maxChunk,
-		}
+		// Use throttled copy for rate limiting
+		_, err = throttledCopy(ctx, hasher, file, buf, c.limiter, c.bytesPerSec)
+	} else {
+		// Normal copy
+		_, err = io.CopyBuffer(hasher, file, buf)
 	}
 
-	if _, err := io.CopyBuffer(hasher, reader, buf); err != nil {
+	if err != nil {
 		return "", err
 	}
 
@@ -354,7 +402,7 @@ func matchGlob(pattern, path string) bool {
 }
 
 // VerifyIntegrity verifies the integrity of files against a manifest
-func VerifyIntegrity(manifest *Result, targetDir string) error {
+func VerifyIntegrity(ctx context.Context, manifest *Result, targetDir string) error {
 	calculator := NewCalculator(0)
 
 	// Resolve symlink if the target directory itself is a symlink
@@ -364,7 +412,7 @@ func VerifyIntegrity(manifest *Result, targetDir string) error {
 	}
 
 	// Calculate current state
-	current, err := calculator.CalculateDirectory(resolvedDir, nil)
+	current, err := calculator.CalculateDirectory(ctx, resolvedDir, nil)
 	if err != nil {
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}
@@ -413,7 +461,7 @@ func VerifyIntegrity(manifest *Result, targetDir string) error {
 }
 
 // VerifyIntegrityWithPatterns verifies the integrity of files against a manifest with patterns
-func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, excludes []string) error {
+func VerifyIntegrityWithPatterns(ctx context.Context, manifest *Result, targetDir string, excludes []string) error {
 	calculator := NewCalculator(0)
 
 	// Resolve symlink if the target directory itself is a symlink
@@ -423,7 +471,7 @@ func VerifyIntegrityWithPatterns(manifest *Result, targetDir string, excludes []
 	}
 
 	// Calculate current state with same patterns
-	current, err := calculator.CalculateDirectory(resolvedDir, excludes)
+	current, err := calculator.CalculateDirectory(ctx, resolvedDir, excludes)
 	if err != nil {
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}

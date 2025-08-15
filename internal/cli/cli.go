@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/catatsuy/kekkai/internal/manifest"
@@ -138,6 +142,10 @@ func (c *CLI) runGenerate(args []string) int {
 		fmt.Fprintf(c.errStream, "Warning: rate-limit %d is very low (< 1KB/s), this may be too restrictive\n", rateLimit)
 	}
 
+	// Create context with signal handling
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Generate manifest
 	var generator *manifest.Generator
 	if rateLimit > 0 {
@@ -146,7 +154,7 @@ func (c *CLI) runGenerate(args []string) int {
 		generator = manifest.NewGenerator(workers)
 	}
 
-	m, err := generator.Generate(target, excludes)
+	m, err := generator.Generate(ctx, target, excludes)
 	if err != nil {
 		c.outputGenerateError(err, format)
 		return ExitCodeFail
@@ -286,11 +294,15 @@ func (c *CLI) runVerify(args []string) int {
 		return ExitCodeFail
 	}
 
+	// Create context with signal handling
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Verify integrity
 	if rateLimit > 0 {
-		err = m.VerifyWithRateLimit(target, workers, rateLimit)
+		err = m.VerifyWithRateLimit(ctx, target, workers, rateLimit)
 	} else {
-		err = m.Verify(target, workers)
+		err = m.Verify(ctx, target, workers)
 	}
 
 	// Output result

@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -87,7 +88,8 @@ func TestCalculateFileHash(t *testing.T) {
 			calc := NewCalculator(0)
 			hasher := sha256.New()
 			buf := make([]byte, calc.bufferSize)
-			hash, err := calc.hashFileWithHasher(tmpfile.Name(), hasher, buf)
+			ctx := context.Background()
+			hash, err := calc.hashFileWithHasher(ctx, tmpfile.Name(), hasher, buf)
 			if err != nil {
 				t.Fatalf("hashFileWithHasher() error = %v", err)
 			}
@@ -101,9 +103,10 @@ func TestCalculateFileHash(t *testing.T) {
 
 func TestCalculateDirectory(t *testing.T) {
 	calc := NewCalculator(0)
+	ctx := context.Background()
 
 	// Test with testdata directory
-	result, err := calc.CalculateDirectory("testdata/sample", nil)
+	result, err := calc.CalculateDirectory(ctx, "testdata/sample", nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() error = %v", err)
 	}
@@ -114,7 +117,7 @@ func TestCalculateDirectory(t *testing.T) {
 	}
 
 	// Verify deterministic hash
-	result2, err := calc.CalculateDirectory("testdata/sample", nil)
+	result2, err := calc.CalculateDirectory(ctx, "testdata/sample", nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() second call error = %v", err)
 	}
@@ -198,7 +201,7 @@ func TestCalculateDirectoryWithPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := calc.CalculateDirectory("testdata/patterns", tt.excludes)
+			result, err := calc.CalculateDirectory(context.Background(), "testdata/patterns", tt.excludes)
 			if err != nil {
 				t.Fatalf("CalculateDirectory() error = %v", err)
 			}
@@ -279,13 +282,13 @@ func TestVerifyIntegrity(t *testing.T) {
 	calc := NewCalculator(0)
 
 	// Generate initial manifest
-	manifest, err := calc.CalculateDirectory("testdata/sample", nil)
+	manifest, err := calc.CalculateDirectory(context.Background(), "testdata/sample", nil)
 	if err != nil {
 		t.Fatalf("Failed to generate manifest: %v", err)
 	}
 
 	// Verify against same directory should pass
-	err = VerifyIntegrity(manifest, "testdata/sample")
+	err = VerifyIntegrity(context.Background(), manifest, "testdata/sample")
 	if err != nil {
 		t.Errorf("VerifyIntegrity() should pass for unchanged files: %v", err)
 	}
@@ -301,7 +304,7 @@ func TestVerifyIntegrity(t *testing.T) {
 	copyTestData(t, "testdata/sample", tempDir)
 
 	// Verify copied files should pass
-	err = VerifyIntegrity(manifest, tempDir)
+	err = VerifyIntegrity(context.Background(), manifest, tempDir)
 	if err != nil {
 		t.Errorf("VerifyIntegrity() should pass for copied files: %v", err)
 	}
@@ -313,7 +316,7 @@ func TestVerifyIntegrity(t *testing.T) {
 	}
 
 	// Verify should fail
-	err = VerifyIntegrity(manifest, tempDir)
+	err = VerifyIntegrity(context.Background(), manifest, tempDir)
 	if err == nil {
 		t.Error("VerifyIntegrity() should fail for modified files")
 	}
@@ -410,7 +413,7 @@ func TestVerifyIntegrityWithPatterns(t *testing.T) {
 			}
 
 			// Calculate manifest with excludes
-			manifest, err := calc.CalculateDirectory(testDir, tt.excludes)
+			manifest, err := calc.CalculateDirectory(context.Background(), testDir, tt.excludes)
 			if err != nil {
 				t.Fatalf("CalculateDirectory() error = %v", err)
 			}
@@ -432,7 +435,7 @@ func TestVerifyIntegrityWithPatterns(t *testing.T) {
 			}
 
 			// Verify with patterns
-			err = VerifyIntegrityWithPatterns(manifest, testDir, tt.excludes)
+			err = VerifyIntegrityWithPatterns(context.Background(), manifest, testDir, tt.excludes)
 
 			if tt.expectSuccess {
 				if err != nil {
@@ -477,7 +480,7 @@ func TestSymlinkSecurity(t *testing.T) {
 		}
 
 		// Generate manifest
-		manifest, err := calc.CalculateDirectory(tempDir, nil)
+		manifest, err := calc.CalculateDirectory(context.Background(), tempDir, nil)
 		if err != nil {
 			t.Fatalf("Failed to generate manifest: %v", err)
 		}
@@ -518,7 +521,7 @@ func TestSymlinkSecurity(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = VerifyIntegrity(manifest, tempDir)
+		err = VerifyIntegrity(context.Background(), manifest, tempDir)
 		if err == nil {
 			t.Error("Should detect symlink target change")
 		} else if !strings.Contains(err.Error(), "modified") {
@@ -531,7 +534,7 @@ func TestSymlinkSecurity(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = VerifyIntegrity(manifest, tempDir)
+		err = VerifyIntegrity(context.Background(), manifest, tempDir)
 		if err == nil {
 			t.Error("Should detect symlink replaced with regular file")
 		} else if !strings.Contains(err.Error(), "modified") {
@@ -544,7 +547,7 @@ func TestSymlinkSecurity(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = VerifyIntegrity(manifest, tempDir)
+		err = VerifyIntegrity(context.Background(), manifest, tempDir)
 		if err == nil {
 			t.Error("Should detect regular file replaced with symlink")
 		} else if !strings.Contains(err.Error(), "modified") {
@@ -558,13 +561,13 @@ func TestSymlinkHandling(t *testing.T) {
 
 	t.Run("directory symlink as target", func(t *testing.T) {
 		// Calculate hash for the real directory
-		realResult, err := calc.CalculateDirectory("testdata/patterns", nil)
+		realResult, err := calc.CalculateDirectory(context.Background(), "testdata/patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate hash for real directory: %v", err)
 		}
 
 		// Calculate hash for the symlink to the directory
-		symlinkResult, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil)
+		symlinkResult, err := calc.CalculateDirectory(context.Background(), "testdata/symlink-to-patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate hash for symlink directory: %v", err)
 		}
@@ -581,25 +584,25 @@ func TestSymlinkHandling(t *testing.T) {
 
 	t.Run("verify with directory symlink", func(t *testing.T) {
 		// Generate manifest from real directory
-		manifest, err := calc.CalculateDirectory("testdata/patterns", nil)
+		manifest, err := calc.CalculateDirectory(context.Background(), "testdata/patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to generate manifest: %v", err)
 		}
 
 		// Verify using symlink should pass
-		err = VerifyIntegrity(manifest, "testdata/symlink-to-patterns")
+		err = VerifyIntegrity(context.Background(), manifest, "testdata/symlink-to-patterns")
 		if err != nil {
 			t.Errorf("Verification should pass for symlink: %v", err)
 		}
 
 		// Generate manifest from symlink
-		symlinkManifest, err := calc.CalculateDirectory("testdata/symlink-to-patterns", nil)
+		symlinkManifest, err := calc.CalculateDirectory(context.Background(), "testdata/symlink-to-patterns", nil)
 		if err != nil {
 			t.Fatalf("Failed to generate manifest from symlink: %v", err)
 		}
 
 		// Verify using real directory should pass
-		err = VerifyIntegrity(symlinkManifest, "testdata/patterns")
+		err = VerifyIntegrity(context.Background(), symlinkManifest, "testdata/patterns")
 		if err != nil {
 			t.Errorf("Verification should pass for real directory: %v", err)
 		}
@@ -607,7 +610,7 @@ func TestSymlinkHandling(t *testing.T) {
 
 	t.Run("file symlinks are tracked", func(t *testing.T) {
 		// Calculate hash for directory containing file symlinks
-		result, err := calc.CalculateDirectory("testdata/symlink-test", nil)
+		result, err := calc.CalculateDirectory(context.Background(), "testdata/symlink-test", nil)
 		if err != nil {
 			t.Fatalf("Failed to calculate hash: %v", err)
 		}
@@ -667,7 +670,7 @@ func TestParallelCalculation(t *testing.T) {
 	}
 
 	// Calculate hash
-	result, err := calc.CalculateDirectory(tempDir, nil)
+	result, err := calc.CalculateDirectory(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() error = %v", err)
 	}
@@ -677,7 +680,7 @@ func TestParallelCalculation(t *testing.T) {
 	}
 
 	// Verify deterministic with parallel processing
-	result2, err := calc.CalculateDirectory(tempDir, nil)
+	result2, err := calc.CalculateDirectory(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("CalculateDirectory() second call error = %v", err)
 	}
@@ -711,14 +714,14 @@ func TestRateLimitedCalculation(t *testing.T) {
 
 	// Test without rate limit
 	calcNormal := NewCalculator(2)
-	result1, err := calcNormal.CalculateDirectory(tempDir, nil)
+	result1, err := calcNormal.CalculateDirectory(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("Normal calculation failed: %v", err)
 	}
 
 	// Test with rate limit (1MB/s)
 	calcRateLimit := NewCalculatorWithRateLimit(2, 1024*1024)
-	result2, err := calcRateLimit.CalculateDirectory(tempDir, nil)
+	result2, err := calcRateLimit.CalculateDirectory(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("Rate limited calculation failed: %v", err)
 	}
