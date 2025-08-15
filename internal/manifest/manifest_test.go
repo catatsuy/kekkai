@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ func TestGenerateManifest(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	generator := NewGenerator(0)
-	manifest, err := generator.Generate(tempDir, nil)
+	manifest, err := generator.Generate(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
@@ -168,13 +169,13 @@ func TestManifestVerify(t *testing.T) {
 
 	// Generate manifest
 	generator := NewGenerator(0)
-	manifest, err := generator.Generate(tempDir, nil)
+	manifest, err := generator.Generate(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
 	// Verify should pass
-	err = manifest.Verify(tempDir, 0)
+	err = manifest.Verify(context.Background(), tempDir, 0)
 	if err != nil {
 		t.Errorf("Verify() should pass for unchanged files: %v", err)
 	}
@@ -187,7 +188,7 @@ func TestManifestVerify(t *testing.T) {
 	}
 
 	// Verify should fail
-	err = manifest.Verify(tempDir, 0)
+	err = manifest.Verify(context.Background(), tempDir, 0)
 	if err == nil {
 		t.Error("Verify() should fail for modified files")
 	}
@@ -271,7 +272,7 @@ func TestManifestWithPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manifest, err := generator.Generate(tempDir, tt.excludes)
+			manifest, err := generator.Generate(context.Background(), tempDir, tt.excludes)
 			if err != nil {
 				t.Fatalf("Generate() error = %v", err)
 			}
@@ -307,7 +308,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 	// Generate manifest with excludes
 	generator := NewGenerator(0)
 	excludes := []string{"*.log", ".env"}
-	manifest, err := generator.Generate(tempDir, excludes)
+	manifest, err := generator.Generate(context.Background(), tempDir, excludes)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
@@ -326,7 +327,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 
 	// Test manifest.Verify() uses excludes correctly
 	t.Run("verify with original files", func(t *testing.T) {
-		err := manifest.Verify(tempDir, 0)
+		err := manifest.Verify(context.Background(), tempDir, 0)
 		if err != nil {
 			t.Errorf("Verify() should succeed with original files: %v", err)
 		}
@@ -340,7 +341,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should still pass because the file is excluded
-		err := manifest.Verify(tempDir, 0)
+		err := manifest.Verify(context.Background(), tempDir, 0)
 		if err != nil {
 			t.Errorf("Verify() should succeed even with modified excluded file: %v", err)
 		}
@@ -354,7 +355,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should still pass because the file matches exclude pattern
-		err := manifest.Verify(tempDir, 0)
+		err := manifest.Verify(context.Background(), tempDir, 0)
 		if err != nil {
 			t.Errorf("Verify() should succeed even with added excluded file: %v", err)
 		}
@@ -368,7 +369,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should fail because the file is included
-		err := manifest.Verify(tempDir, 0)
+		err := manifest.Verify(context.Background(), tempDir, 0)
 		if err == nil {
 			t.Error("Verify() should fail with modified included file")
 		} else if !strings.Contains(err.Error(), "modified: app.go") {
@@ -389,7 +390,7 @@ func TestManifestExcludePatterns(t *testing.T) {
 		}
 
 		// Verify should fail because the file is not excluded
-		err := manifest.Verify(tempDir, 0)
+		err := manifest.Verify(context.Background(), tempDir, 0)
 		if err == nil {
 			t.Error("Verify() should fail with added included file")
 		} else if !strings.Contains(err.Error(), "added: new.go") {
@@ -408,14 +409,14 @@ func TestGeneratorWithRateLimit(t *testing.T) {
 
 	// Test normal generator
 	generator1 := NewGenerator(2)
-	manifest1, err := generator1.Generate(tempDir, nil)
+	manifest1, err := generator1.Generate(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("Normal generator failed: %v", err)
 	}
 
 	// Test rate limited generator
 	generator2 := NewGeneratorWithRateLimit(2, 1024*1024) // 1MB/s
-	manifest2, err := generator2.Generate(tempDir, nil)
+	manifest2, err := generator2.Generate(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("Rate limited generator failed: %v", err)
 	}
@@ -437,19 +438,19 @@ func TestVerifyWithRateLimit(t *testing.T) {
 
 	// Generate manifest
 	generator := NewGenerator(0)
-	manifest, err := generator.Generate(tempDir, nil)
+	manifest, err := generator.Generate(context.Background(), tempDir, nil)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
 	// Test normal verify
-	err = manifest.Verify(tempDir, 0)
+	err = manifest.Verify(context.Background(), tempDir, 0)
 	if err != nil {
 		t.Errorf("Normal verify should pass: %v", err)
 	}
 
 	// Test rate limited verify
-	err = manifest.VerifyWithRateLimit(tempDir, 0, 1024*1024) // 1MB/s
+	err = manifest.VerifyWithRateLimit(context.Background(), tempDir, 0, 1024*1024) // 1MB/s
 	if err != nil {
 		t.Errorf("Rate limited verify should pass: %v", err)
 	}
@@ -462,8 +463,8 @@ func TestVerifyWithRateLimit(t *testing.T) {
 	}
 
 	// Both should fail with modified file
-	err1 := manifest.Verify(tempDir, 0)
-	err2 := manifest.VerifyWithRateLimit(tempDir, 0, 1024*1024)
+	err1 := manifest.Verify(context.Background(), tempDir, 0)
+	err2 := manifest.VerifyWithRateLimit(context.Background(), tempDir, 0, 1024*1024)
 
 	if err1 == nil || err2 == nil {
 		t.Error("Both verify methods should fail with modified file")

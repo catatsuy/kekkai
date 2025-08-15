@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,10 +41,10 @@ func NewGeneratorWithRateLimit(numWorkers int, bytesPerSec int64) *Generator {
 	}
 }
 
-// Generate creates a manifest for the specified directory
-func (g *Generator) Generate(targetDir string, excludes []string) (*Manifest, error) {
+// Generate creates a manifest for the specified directory with context
+func (g *Generator) Generate(ctx context.Context, targetDir string, excludes []string) (*Manifest, error) {
 	// Calculate hashes
-	result, err := g.calculator.CalculateDirectory(targetDir, excludes)
+	result, err := g.calculator.CalculateDirectory(ctx, targetDir, excludes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate directory hash: %w", err)
 	}
@@ -116,26 +117,22 @@ func LoadFromReader(r io.Reader) (*Manifest, error) {
 	return &manifest, nil
 }
 
-// Verify checks the integrity of files using specified worker count
-func (m *Manifest) Verify(targetDir string, numWorkers int) error {
-	// Create calculator with specified workers
+// Verify checks the integrity of files with context
+func (m *Manifest) Verify(ctx context.Context, targetDir string, numWorkers int) error {
 	calculator := hash.NewCalculator(numWorkers)
-
-	return m.verifyWithCalculator(targetDir, calculator)
+	return m.verifyWithCalculator(ctx, targetDir, calculator)
 }
 
-// VerifyWithRateLimit checks the integrity of files with rate limiting
-func (m *Manifest) VerifyWithRateLimit(targetDir string, numWorkers int, bytesPerSec int64) error {
-	// Create calculator with rate limiting
+// VerifyWithRateLimit checks the integrity of files with rate limiting and context
+func (m *Manifest) VerifyWithRateLimit(ctx context.Context, targetDir string, numWorkers int, bytesPerSec int64) error {
 	calculator := hash.NewCalculatorWithRateLimit(numWorkers, bytesPerSec)
-
-	return m.verifyWithCalculator(targetDir, calculator)
+	return m.verifyWithCalculator(ctx, targetDir, calculator)
 }
 
-// verifyWithCalculator performs the actual verification with the provided calculator
-func (m *Manifest) verifyWithCalculator(targetDir string, calculator *hash.Calculator) error {
+// verifyWithCalculator performs the actual verification with the provided calculator and context
+func (m *Manifest) verifyWithCalculator(ctx context.Context, targetDir string, calculator *hash.Calculator) error {
 	// Calculate current state with same patterns
-	currentResult, err := calculator.CalculateDirectory(targetDir, m.Excludes)
+	currentResult, err := calculator.CalculateDirectory(ctx, targetDir, m.Excludes)
 	if err != nil {
 		return fmt.Errorf("failed to calculate current state: %w", err)
 	}
