@@ -129,6 +129,15 @@ func (c *CLI) runGenerate(args []string) int {
 		return ExitCodeOK
 	}
 
+	// Validate rate limit
+	if rateLimit < 0 {
+		fmt.Fprintf(c.errStream, "Error: rate-limit cannot be negative\n")
+		return ExitCodeFail
+	}
+	if rateLimit > 0 && rateLimit < 1024 {
+		fmt.Fprintf(c.errStream, "Warning: rate-limit %d is very low (< 1KB/s), this may be too restrictive\n", rateLimit)
+	}
+
 	// Generate manifest
 	var generator *manifest.Generator
 	if rateLimit > 0 {
@@ -231,6 +240,15 @@ func (c *CLI) runVerify(args []string) int {
 	if help {
 		c.printVerifyHelp(flags)
 		return ExitCodeOK
+	}
+
+	// Validate rate limit
+	if rateLimit < 0 {
+		fmt.Fprintf(c.errStream, "Error: rate-limit cannot be negative\n")
+		return ExitCodeFail
+	}
+	if rateLimit > 0 && rateLimit < 1024 {
+		fmt.Fprintf(c.errStream, "Warning: rate-limit %d is very low (< 1KB/s), this may be too restrictive\n", rateLimit)
 	}
 
 	// Load manifest
