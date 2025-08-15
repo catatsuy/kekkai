@@ -103,6 +103,7 @@ func (c *CLI) runGenerate(args []string) int {
 		format    string
 		workers   int
 		rateLimit int64
+		timeout   int
 		help      bool
 	)
 
@@ -118,6 +119,7 @@ func (c *CLI) runGenerate(args []string) int {
 	flags.StringVar(&format, "format", "text", "Output format (text|json)")
 	flags.IntVar(&workers, "workers", 0, "Number of worker threads (0 = auto detect)")
 	flags.Int64Var(&rateLimit, "rate-limit", 0, "Rate limit in bytes per second (0 = no limit)")
+	flags.IntVar(&timeout, "timeout", 300, "Timeout in seconds (default: 300)")
 	flags.BoolVar(&help, "help", false, "Show help for generate command")
 	flags.BoolVar(&help, "h", false, "Show help for generate command")
 
@@ -145,6 +147,13 @@ func (c *CLI) runGenerate(args []string) int {
 	// Create context with signal handling
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Apply timeout if specified
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+		defer cancel()
+	}
 
 	// Generate manifest
 	var generator *manifest.Generator
@@ -222,6 +231,7 @@ func (c *CLI) runVerify(args []string) int {
 		format       string
 		workers      int
 		rateLimit    int64
+		timeout      int
 		help         bool
 	)
 
@@ -237,6 +247,7 @@ func (c *CLI) runVerify(args []string) int {
 	flags.StringVar(&format, "format", "text", "Output format (text|json)")
 	flags.IntVar(&workers, "workers", 0, "Number of worker threads (0 = auto detect)")
 	flags.Int64Var(&rateLimit, "rate-limit", 0, "Rate limit in bytes per second (0 = no limit)")
+	flags.IntVar(&timeout, "timeout", 300, "Timeout in seconds (default: 300)")
 	flags.BoolVar(&help, "help", false, "Show help for verify command")
 	flags.BoolVar(&help, "h", false, "Show help for verify command")
 
@@ -297,6 +308,13 @@ func (c *CLI) runVerify(args []string) int {
 	// Create context with signal handling
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Apply timeout if specified
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+		defer cancel()
+	}
 
 	// Verify integrity
 	if rateLimit > 0 {
