@@ -307,6 +307,7 @@ Options:
   -format string      Output format: text, json (default "text")
   -workers int        Number of worker threads (0 = auto detect)
   -rate-limit int     Rate limit in bytes per second (0 = no limit)
+  -timeout int        Timeout in seconds (default: 300)
 ```
 
 ### verify
@@ -324,6 +325,7 @@ Options:
   -format string      Output format: text, json (default "text")
   -workers int        Number of worker threads (0 = auto detect)
   -rate-limit int     Rate limit in bytes per second (0 = no limit)
+  -timeout int        Timeout in seconds (default: 300)
 ```
 
 ## Output Formats
