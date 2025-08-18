@@ -8,23 +8,27 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/catatsuy/kekkai/internal/cache"
 	"golang.org/x/time/rate"
 )
 
 // FileInfo represents information about a single file or symlink
 type FileInfo struct {
-	Path       string `json:"path"`
-	Hash       string `json:"hash"`
-	Size       int64  `json:"size"`
-	IsSymlink  bool   `json:"is_symlink,omitempty"`
-	LinkTarget string `json:"link_target,omitempty"`
+	Path       string    `json:"path"`
+	Hash       string    `json:"hash"`
+	Size       int64     `json:"size"`
+	ModTime    time.Time `json:"mod_time"`
+	IsSymlink  bool      `json:"is_symlink,omitempty"`
+	LinkTarget string    `json:"link_target,omitempty"`
 }
 
 // Result represents the result of hash calculation
@@ -36,10 +40,13 @@ type Result struct {
 
 // Calculator handles hash calculation for files and directories
 type Calculator struct {
-	numWorkers  int
-	bufferSize  int
-	bytesPerSec int64         // Rate limit in bytes per second (0 = no limit)
-	limiter     *rate.Limiter // Shared rate limiter for all workers
+	numWorkers        int
+	bufferSize        int
+	bytesPerSec       int64                   // Rate limit in bytes per second (0 = no limit)
+	limiter           *rate.Limiter           // Shared rate limiter for all workers
+	metadataCache     *cache.MetadataVerifier // Optional metadata cache for fast verification
+	verifyProbability float64                 // Probability of hash verification (0.0-1.0)
+	manifestHashes    map[string]string       // Optional manifest hashes for cache-based verification
 }
 
 // throttledCopy performs io.CopyBuffer with rate limiting
@@ -131,6 +138,70 @@ func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
 		bytesPerSec: bytesPerSec,
 		limiter:     limiter,
 	}
+}
+
+// EnableMetadataCache enables metadata caching for fast verification
+func (c *Calculator) EnableMetadataCache(cacheDir, targetDir, baseName, appName string, manifestTime time.Time) error {
+	c.metadataCache = cache.NewMetadataVerifier(cacheDir, targetDir, baseName, appName)
+	if err := c.metadataCache.Load(); err != nil {
+		// Log warning but continue (cache will be rebuilt)
+		fmt.Fprintf(os.Stderr, "Warning: failed to load cache: %v\n", err)
+	}
+	// Set manifest time and check validity
+	c.metadataCache.SetManifestTime(manifestTime)
+	if !c.metadataCache.IsValidForManifest(manifestTime) {
+		// Cache is older than manifest, clear it
+		c.metadataCache.Clear()
+		fmt.Fprintf(os.Stderr, "Info: Cache cleared as it's older than manifest\n")
+	}
+	return nil
+}
+
+// SetVerifyProbability sets the probability of hash verification (0.0-1.0)
+// 0.0 = always use cache if available (fastest)
+// 1.0 = always calculate hash (most secure)
+// 0.1 = 10% chance to verify hash even if cache hit
+func (c *Calculator) SetVerifyProbability(p float64) {
+	if p < 0 {
+		p = 0
+	} else if p > 1 {
+		p = 1
+	}
+	c.verifyProbability = p
+}
+
+// SetManifestHashes sets the manifest hashes for cache-based verification
+func (c *Calculator) SetManifestHashes(hashes map[string]string) {
+	c.manifestHashes = hashes
+}
+
+// UpdateCacheForFiles updates cache entries for all provided files
+func (c *Calculator) UpdateCacheForFiles(rootDir string, files []FileInfo) error {
+	if c.metadataCache == nil {
+		return nil
+	}
+
+	for _, file := range files {
+		// Only update cache for regular files (not symlinks)
+		if !file.IsSymlink {
+			// Convert relative path back to absolute path
+			absPath := filepath.Join(rootDir, file.Path)
+			if err := c.metadataCache.UpdateMetadata(absPath); err != nil {
+				// Log warning but continue with other files
+				fmt.Fprintf(os.Stderr, "Warning: failed to update cache for %s: %v\n", file.Path, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// SaveMetadataCache saves the current metadata cache to disk
+func (c *Calculator) SaveMetadataCache() error {
+	if c.metadataCache == nil {
+		return nil
+	}
+	return c.metadataCache.Save()
 }
 
 // CalculateDirectory calculates hash for all files in a directory with context
@@ -238,8 +309,31 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 					relPath, _ := filepath.Rel(rootDir, path)
 					relPath = filepath.ToSlash(relPath)
 
-					// Handle symlinks
-					if info.Mode()&os.ModeSymlink != 0 {
+					var fileHash string
+					needHashCalculation := true
+
+					// Check cache if available (not for symlinks)
+					if c.metadataCache != nil && info.Mode()&os.ModeSymlink == 0 {
+						if c.metadataCache.CheckMetadata(path) {
+							// Metadata matches - decide whether to verify based on probability
+							if c.verifyProbability == 0 || rand.Float64() > c.verifyProbability {
+								// Skip hash calculation, use manifest hash if available
+								if c.manifestHashes != nil {
+									if manifestHash, ok := c.manifestHashes[relPath]; ok {
+										fileHash = manifestHash
+										needHashCalculation = false
+									}
+								} else {
+									// No manifest hashes, skip calculation anyway
+									needHashCalculation = false
+								}
+							}
+							// else: probabilistically verify even with cache hit
+						}
+					}
+
+					// Handle symlinks or calculate hash if needed
+					if needHashCalculation && info.Mode()&os.ModeSymlink != 0 {
 						target, err := os.Readlink(path)
 						if err != nil {
 							errors <- fmt.Errorf("failed to read symlink %s: %w", path, err)
@@ -250,28 +344,32 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 						// This ensures changes to symlink targets are detected
 						hasher.Reset()
 						hasher.Write([]byte("symlink:" + target))
-						hash := hex.EncodeToString(hasher.Sum(nil))
-
-						results <- FileInfo{
-							Path:       relPath,
-							Hash:       hash,
-							Size:       0,
-							IsSymlink:  true,
-							LinkTarget: target,
-						}
-					} else {
-						// Regular file
-						hash, err := c.hashFileWithHasher(ctx, path, hasher, buf)
+						fileHash = hex.EncodeToString(hasher.Sum(nil))
+					} else if needHashCalculation {
+						// Regular file - calculate hash
+						var err error
+						fileHash, err = c.hashFileWithHasher(ctx, path, hasher, buf)
 						if err != nil {
 							errors <- fmt.Errorf("failed to hash %s: %w", path, err)
 							continue
 						}
 
-						results <- FileInfo{
-							Path: relPath,
-							Hash: hash,
-							Size: info.Size(),
-						}
+					}
+
+					// Create result
+					results <- FileInfo{
+						Path:      relPath,
+						Hash:      fileHash,
+						Size:      info.Size(),
+						ModTime:   info.ModTime(),
+						IsSymlink: info.Mode()&os.ModeSymlink != 0,
+						LinkTarget: func() string {
+							if info.Mode()&os.ModeSymlink != 0 {
+								target, _ := os.Readlink(path)
+								return target
+							}
+							return ""
+						}(),
 					}
 				}
 			}
