@@ -222,17 +222,20 @@ func (c *CLI) runGenerate(args []string) int {
 // runVerify handles the verify command
 func (c *CLI) runVerify(args []string) int {
 	var (
-		manifestPath string
-		s3Bucket     string
-		s3Region     string
-		basePath     string
-		appName      string
-		target       string
-		format       string
-		workers      int
-		rateLimit    int64
-		timeout      int
-		help         bool
+		manifestPath      string
+		s3Bucket          string
+		s3Region          string
+		basePath          string
+		appName           string
+		target            string
+		format            string
+		workers           int
+		rateLimit         int64
+		timeout           int
+		useCache          bool
+		cacheDir          string
+		verifyProbability float64
+		help              bool
 	)
 
 	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
@@ -248,6 +251,9 @@ func (c *CLI) runVerify(args []string) int {
 	flags.IntVar(&workers, "workers", 0, "Number of worker threads (0 = auto detect)")
 	flags.Int64Var(&rateLimit, "rate-limit", 0, "Rate limit in bytes per second (0 = no limit)")
 	flags.IntVar(&timeout, "timeout", 300, "Timeout in seconds (default: 300)")
+	flags.BoolVar(&useCache, "use-cache", false, "Enable local cache for verification (checks size, mtime, ctime)")
+	flags.StringVar(&cacheDir, "cache-dir", "", "Directory for cache file (default: system temp directory)")
+	flags.Float64Var(&verifyProbability, "verify-probability", 0.1, "Probability of hash verification even with cache hit (0.0-1.0, default: 0.1)")
 	flags.BoolVar(&help, "help", false, "Show help for verify command")
 	flags.BoolVar(&help, "h", false, "Show help for verify command")
 
@@ -317,10 +323,26 @@ func (c *CLI) runVerify(args []string) int {
 	}
 
 	// Verify integrity
-	if rateLimit > 0 {
-		err = m.VerifyWithRateLimit(ctx, target, workers, rateLimit)
+	if useCache {
+		// Use cache directory (default to system temp directory if not specified)
+		cacheDirToUse := cacheDir
+		if cacheDirToUse == "" {
+			cacheDirToUse = os.TempDir()
+		}
+
+		// Use cache with probabilistic verification
+		if rateLimit > 0 {
+			err = m.VerifyWithCacheAndRateLimit(ctx, target, cacheDirToUse, basePath, appName, workers, rateLimit, verifyProbability)
+		} else {
+			err = m.VerifyWithCache(ctx, target, cacheDirToUse, basePath, appName, workers, verifyProbability)
+		}
 	} else {
-		err = m.Verify(ctx, target, workers)
+		// Normal verify mode: calculate all hashes
+		if rateLimit > 0 {
+			err = m.VerifyWithRateLimit(ctx, target, workers, rateLimit)
+		} else {
+			err = m.Verify(ctx, target, workers)
+		}
 	}
 
 	// Output result

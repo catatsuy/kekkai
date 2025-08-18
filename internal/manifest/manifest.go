@@ -129,6 +129,62 @@ func (m *Manifest) VerifyWithRateLimit(ctx context.Context, targetDir string, nu
 	return m.verifyWithCalculator(ctx, targetDir, calculator)
 }
 
+// VerifyWithCache checks integrity using cache with probabilistic verification
+func (m *Manifest) VerifyWithCache(ctx context.Context, targetDir, cacheDir, baseName, appName string, numWorkers int, verifyProbability float64) error {
+	calculator := hash.NewCalculator(numWorkers)
+	// Enable cache for the specified directory
+	manifestTime, _ := time.Parse(time.RFC3339, m.GeneratedAt)
+	if err := calculator.EnableMetadataCache(cacheDir, targetDir, baseName, appName, manifestTime); err != nil {
+		return fmt.Errorf("failed to enable cache: %w", err)
+	}
+	calculator.SetVerifyProbability(verifyProbability)
+	// Set manifest hashes for cache-based verification
+	manifestHashes := make(map[string]string)
+	for _, f := range m.Files {
+		manifestHashes[f.Path] = f.Hash
+	}
+	calculator.SetManifestHashes(manifestHashes)
+
+	// Perform verification
+	err := m.verifyWithCalculator(ctx, targetDir, calculator)
+
+	// Only update cache if verification was successful
+	if err == nil {
+		calculator.UpdateCacheForFiles(targetDir, m.Files)
+		calculator.SaveMetadataCache()
+	}
+
+	return err
+}
+
+// VerifyWithCacheAndRateLimit combines cache verification with rate limiting
+func (m *Manifest) VerifyWithCacheAndRateLimit(ctx context.Context, targetDir, cacheDir, baseName, appName string, numWorkers int, bytesPerSec int64, verifyProbability float64) error {
+	calculator := hash.NewCalculatorWithRateLimit(numWorkers, bytesPerSec)
+	// Enable cache for the specified directory
+	manifestTime, _ := time.Parse(time.RFC3339, m.GeneratedAt)
+	if err := calculator.EnableMetadataCache(cacheDir, targetDir, baseName, appName, manifestTime); err != nil {
+		return fmt.Errorf("failed to enable cache: %w", err)
+	}
+	calculator.SetVerifyProbability(verifyProbability)
+	// Set manifest hashes for cache-based verification
+	manifestHashes := make(map[string]string)
+	for _, f := range m.Files {
+		manifestHashes[f.Path] = f.Hash
+	}
+	calculator.SetManifestHashes(manifestHashes)
+
+	// Perform verification
+	err := m.verifyWithCalculator(ctx, targetDir, calculator)
+
+	// Only update cache if verification was successful
+	if err == nil {
+		calculator.UpdateCacheForFiles(targetDir, m.Files)
+		calculator.SaveMetadataCache()
+	}
+
+	return err
+}
+
 // verifyWithCalculator performs the actual verification with the provided calculator and context
 func (m *Manifest) verifyWithCalculator(ctx context.Context, targetDir string, calculator *hash.Calculator) error {
 	// Calculate current state with same patterns
