@@ -15,7 +15,6 @@ import (
 // Manifest represents the complete manifest structure
 type Manifest struct {
 	Version     string          `json:"version"`
-	TotalHash   string          `json:"total_hash"`
 	FileCount   int             `json:"file_count"`
 	GeneratedAt string          `json:"generated_at"`
 	Excludes    []string        `json:"excludes,omitempty"`
@@ -52,7 +51,6 @@ func (g *Generator) Generate(ctx context.Context, targetDir string, excludes []s
 	// Create manifest
 	manifest := &Manifest{
 		Version:     "1.0",
-		TotalHash:   result.TotalHash,
 		FileCount:   result.FileCount,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Excludes:    excludes,
@@ -193,12 +191,7 @@ func (m *Manifest) verifyWithCalculator(ctx context.Context, targetDir string, c
 		return fmt.Errorf("failed to calculate current state: %w", err)
 	}
 
-	// Quick check with total hash
-	if m.TotalHash == currentResult.TotalHash {
-		return nil // All files are intact
-	}
-
-	// Detailed comparison with file type and size checking
+	// Compare file hashes
 	manifestMap := make(map[string]hash.FileInfo)
 	for _, f := range m.Files {
 		manifestMap[f.Path] = f
@@ -268,10 +261,9 @@ func (m *Manifest) verifyWithCalculator(ctx context.Context, targetDir string, c
 // GetSummary returns a summary of the manifest
 func (m *Manifest) GetSummary() string {
 	return fmt.Sprintf(
-		"Version: %s\nGenerated: %s\nTotal Hash: %s\nFile Count: %d",
+		"Version: %s\nGenerated: %s\nFile Count: %d",
 		m.Version,
 		m.GeneratedAt,
-		m.TotalHash,
 		m.FileCount,
 	)
 }

@@ -536,51 +536,6 @@ func TestSymlinkExcludePatterns(t *testing.T) {
 	}
 }
 
-func TestCalculateTotalHashWithSymlinks(t *testing.T) {
-	calc := NewCalculator(1)
-
-	files := []FileInfo{
-		{
-			Path:      "file1.txt",
-			Hash:      "hash1",
-			Size:      100,
-			IsSymlink: false,
-		},
-		{
-			Path:       "link1",
-			Hash:       "hash2",
-			Size:       0,
-			IsSymlink:  true,
-			LinkTarget: "file1.txt",
-		},
-		{
-			Path:      "file2.txt",
-			Hash:      "hash3",
-			Size:      200,
-			IsSymlink: false,
-		},
-	}
-
-	totalHash := calc.calculateTotalHash(files)
-	if totalHash == "" {
-		t.Error("Total hash should not be empty")
-	}
-
-	// Ensure deterministic hash
-	totalHash2 := calc.calculateTotalHash(files)
-	if totalHash != totalHash2 {
-		t.Error("Total hash should be deterministic")
-	}
-
-	// Change symlink target should change total hash
-	files[1].LinkTarget = "different.txt"
-	files[1].Hash = "hash2_modified"
-	totalHash3 := calc.calculateTotalHash(files)
-	if totalHash == totalHash3 {
-		t.Error("Total hash should change when symlink target changes")
-	}
-}
-
 func TestParallelSymlinkProcessing(t *testing.T) {
 	tempDir := t.TempDir()
 	ctx := context.Background()
