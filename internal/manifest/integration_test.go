@@ -64,7 +64,7 @@ func TestIntegrationSymlinkAttackScenarios(t *testing.T) {
 		err = manifest.Verify(ctx, tempDir, 2)
 		if err == nil {
 			t.Error("Should detect symlink replaced with regular file")
-		} else if !strings.Contains(err.Error(), "type changed") {
+		} else if !strings.Contains(err.Error(), "modified:") && !strings.Contains(err.Error(), "type") {
 			t.Errorf("Expected type change error, got: %v", err)
 		}
 

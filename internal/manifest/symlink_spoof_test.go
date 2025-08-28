@@ -56,7 +56,7 @@ func TestSymlinkSpoofingPrevention(t *testing.T) {
 		err := manifest.Verify(context.Background(), tempDir, 0)
 		if err == nil {
 			t.Error("Verify() should fail when symlink is replaced with regular file")
-		} else if !strings.Contains(err.Error(), "type changed") {
+		} else if !strings.Contains(err.Error(), "modified: link (type symlink→file)") {
 			t.Errorf("Error should mention type change, got: %v", err)
 		}
 
@@ -95,7 +95,7 @@ func TestSymlinkSpoofingPrevention(t *testing.T) {
 		err = manifest2.Verify(context.Background(), tempDir, 0)
 		if err == nil {
 			t.Error("Verify() should fail when regular file is replaced with symlink")
-		} else if !strings.Contains(err.Error(), "type changed") {
+		} else if !strings.Contains(err.Error(), "modified: regular.txt (type file→symlink)") {
 			t.Errorf("Error should mention type change, got: %v", err)
 		}
 
@@ -183,7 +183,7 @@ func TestSymlinkSpoofingPrevention(t *testing.T) {
 		}
 
 		// Manually modify the symlink's size in the manifest
-		// This shouldn't cause verification to fail since symlink sizes are not meaningful
+		// This should cause verification to fail since we now check sizes
 		for i := range manifest4.Files {
 			if manifest4.Files[i].Path == "symlink_test" && manifest4.Files[i].IsSymlink {
 				manifest4.Files[i].Size = 99999 // Arbitrary different size
@@ -191,10 +191,16 @@ func TestSymlinkSpoofingPrevention(t *testing.T) {
 			}
 		}
 
-		// Verification should still pass (symlink size is ignored)
+		// Manually modify the total hash to force detailed comparison
+		manifest4.TotalHash = "force_detailed_check"
+
+		// Verification should fail due to size difference
+		// (Now we check size for both symlinks and regular files for consistency)
 		err = manifest4.Verify(context.Background(), tempDir, 0)
-		if err != nil {
-			t.Errorf("Verify() should pass even with different symlink size: %v", err)
+		if err == nil {
+			t.Error("Verify() should fail when size doesn't match")
+		} else if !strings.Contains(err.Error(), "modified: symlink_test (size") {
+			t.Errorf("Error should mention size change, got: %v", err)
 		}
 
 		// Clean up
@@ -272,7 +278,7 @@ func TestManifestVerifyWithTypeAndSize(t *testing.T) {
 				os.Remove(link1)
 				os.WriteFile(link1, []byte("spoofed"), 0644)
 			},
-			expectError: "type changed: link1",
+			expectError: "modified: link1 (type symlink→file)",
 			cleanup: func() {
 				os.Remove(link1)
 				os.Symlink("file1.txt", link1)
@@ -284,7 +290,7 @@ func TestManifestVerifyWithTypeAndSize(t *testing.T) {
 				os.Remove(file2)
 				os.Symlink("file1.txt", file2)
 			},
-			expectError: "type changed: file2.txt",
+			expectError: "modified: file2.txt (type file→symlink)",
 			cleanup: func() {
 				os.Remove(file2)
 				os.WriteFile(file2, []byte("content2"), 0644)
@@ -310,7 +316,7 @@ func TestManifestVerifyWithTypeAndSize(t *testing.T) {
 					}
 				}
 			},
-			expectError: "size changed: file1.txt",
+			expectError: "modified: file1.txt (size",
 			cleanup: func() {
 				// Restore correct size
 				for i := range testManifest.Files {
