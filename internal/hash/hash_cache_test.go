@@ -142,14 +142,23 @@ func TestCalculator_CacheWithFileModification(t *testing.T) {
 		t.Fatalf("SaveMetadataCache() failed: %v", err)
 	}
 
-	// Modify file
-	modifiedContent := []byte("modified content")
+	// Sleep first to ensure different timestamp
+	time.Sleep(1 * time.Second)
+
+	// Modify file content and permissions to ensure ctime changes
+	modifiedContent := []byte("modified content that is significantly different from original")
 	err = os.WriteFile(testFile, modifiedContent, 0644)
 	if err != nil {
 		t.Fatalf("Failed to modify test file: %v", err)
 	}
 
-	// Sleep to ensure timestamp changes
+	// Change permissions to ensure ctime change on Linux
+	err = os.Chmod(testFile, 0755)
+	if err != nil {
+		t.Fatalf("Failed to change file permissions: %v", err)
+	}
+
+	// Additional sleep to ensure timestamp changes are visible
 	time.Sleep(100 * time.Millisecond)
 
 	// Create new calculator
