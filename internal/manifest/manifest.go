@@ -198,24 +198,53 @@ func (m *Manifest) verifyWithCalculator(ctx context.Context, targetDir string, c
 		return nil // All files are intact
 	}
 
-	// Detailed comparison
-	manifestMap := make(map[string]string)
+	// Detailed comparison with file type and size checking
+	manifestMap := make(map[string]hash.FileInfo)
 	for _, f := range m.Files {
-		manifestMap[f.Path] = f.Hash
+		manifestMap[f.Path] = f
 	}
 
-	currentMap := make(map[string]string)
+	currentMap := make(map[string]hash.FileInfo)
 	for _, f := range currentResult.Files {
-		currentMap[f.Path] = f.Hash
+		currentMap[f.Path] = f
 	}
 
 	issues := make([]string, 0, 10)
 
-	// Check for modified or deleted files
-	for path, expectedHash := range manifestMap {
-		if actualHash, exists := currentMap[path]; exists {
-			if expectedHash != actualHash {
-				issues = append(issues, fmt.Sprintf("modified: %s", path))
+	// Check for modified/deleted files (checking hash/size/type)
+	for path, expectedFile := range manifestMap {
+		if actualFile, exists := currentMap[path]; exists {
+			// Check file type (symlink vs regular file)
+			if expectedFile.IsSymlink != actualFile.IsSymlink {
+				// Use modified: prefix for CLI compatibility
+				issues = append(issues, fmt.Sprintf(
+					"modified: %s (type %s→%s)",
+					path,
+					func() string {
+						if expectedFile.IsSymlink {
+							return "symlink"
+						}
+						return "file"
+					}(),
+					func() string {
+						if actualFile.IsSymlink {
+							return "symlink"
+						}
+						return "file"
+					}(),
+				))
+				continue
+			}
+			// Check content hash
+			if expectedFile.Hash != actualFile.Hash {
+				issues = append(issues, fmt.Sprintf("modified: %s (hash)", path))
+				continue
+			}
+			// Check size (for both symlinks and regular files for consistency with totalHash)
+			if expectedFile.Size != actualFile.Size {
+				issues = append(issues, fmt.Sprintf(
+					"modified: %s (size %d→%d)", path, expectedFile.Size, actualFile.Size))
+				continue
 			}
 		} else {
 			issues = append(issues, fmt.Sprintf("deleted: %s", path))
