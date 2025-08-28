@@ -198,24 +198,43 @@ func (m *Manifest) verifyWithCalculator(ctx context.Context, targetDir string, c
 		return nil // All files are intact
 	}
 
-	// Detailed comparison
-	manifestMap := make(map[string]string)
+	// Detailed comparison with file type and size checking
+	manifestMap := make(map[string]hash.FileInfo)
 	for _, f := range m.Files {
-		manifestMap[f.Path] = f.Hash
+		manifestMap[f.Path] = f
 	}
 
-	currentMap := make(map[string]string)
+	currentMap := make(map[string]hash.FileInfo)
 	for _, f := range currentResult.Files {
-		currentMap[f.Path] = f.Hash
+		currentMap[f.Path] = f
 	}
 
 	issues := make([]string, 0, 10)
 
-	// Check for modified or deleted files
-	for path, expectedHash := range manifestMap {
-		if actualHash, exists := currentMap[path]; exists {
-			if expectedHash != actualHash {
+	// Check for modified, deleted, or type-changed files
+	for path, expectedFile := range manifestMap {
+		if actualFile, exists := currentMap[path]; exists {
+			// Check file type (symlink vs regular file)
+			if expectedFile.IsSymlink != actualFile.IsSymlink {
+				issues = append(issues, fmt.Sprintf("type changed: %s (was %s, now %s)", path,
+					func() string {
+						if expectedFile.IsSymlink {
+							return "symlink"
+						}
+						return "file"
+					}(),
+					func() string {
+						if actualFile.IsSymlink {
+							return "symlink"
+						}
+						return "file"
+					}()))
+			} else if expectedFile.Hash != actualFile.Hash {
+				// Hash mismatch
 				issues = append(issues, fmt.Sprintf("modified: %s", path))
+			} else if !expectedFile.IsSymlink && expectedFile.Size != actualFile.Size {
+				// Size mismatch for regular files (not applicable for symlinks)
+				issues = append(issues, fmt.Sprintf("size changed: %s (was %d bytes, now %d bytes)", path, expectedFile.Size, actualFile.Size))
 			}
 		} else {
 			issues = append(issues, fmt.Sprintf("deleted: %s", path))
