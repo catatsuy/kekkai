@@ -59,7 +59,6 @@ func (s *S3Storage) upload(key string, m *manifest.Manifest) error {
 		ContentType:          aws.String("application/json"),
 		ServerSideEncryption: aws.String("AES256"), // Enable server-side encryption
 		Metadata: map[string]*string{
-			"total-hash":   aws.String(m.TotalHash),
 			"generated-at": aws.String(m.GeneratedAt),
 			"file-count":   aws.String(fmt.Sprintf("%d", m.FileCount)),
 		},

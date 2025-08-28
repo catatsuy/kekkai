@@ -30,10 +30,6 @@ func TestGenerateManifest(t *testing.T) {
 		t.Errorf("Version = %v, want 1.0", manifest.Version)
 	}
 
-	if manifest.TotalHash == "" {
-		t.Error("TotalHash should not be empty")
-	}
-
 	if manifest.FileCount == 0 {
 		t.Error("FileCount should be greater than 0")
 	}
@@ -53,7 +49,6 @@ func TestSaveAndLoadManifest(t *testing.T) {
 	// Create a test manifest
 	manifest := &Manifest{
 		Version:     "1.0",
-		TotalHash:   "abc123def456",
 		FileCount:   2,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Files: []hash.FileInfo{
@@ -79,9 +74,6 @@ func TestSaveAndLoadManifest(t *testing.T) {
 		}
 
 		// Compare
-		if loaded.TotalHash != manifest.TotalHash {
-			t.Errorf("TotalHash = %v, want %v", loaded.TotalHash, manifest.TotalHash)
-		}
 
 		if loaded.FileCount != manifest.FileCount {
 			t.Errorf("FileCount = %d, want %d", loaded.FileCount, manifest.FileCount)
@@ -109,8 +101,12 @@ func TestSaveAndLoadManifest(t *testing.T) {
 		}
 
 		// Compare
-		if loaded.TotalHash != manifest.TotalHash {
-			t.Errorf("TotalHash = %v, want %v", loaded.TotalHash, manifest.TotalHash)
+		if loaded.FileCount != manifest.FileCount {
+			t.Errorf("FileCount = %d, want %d", loaded.FileCount, manifest.FileCount)
+		}
+
+		if len(loaded.Files) != len(manifest.Files) {
+			t.Errorf("Files length = %d, want %d", len(loaded.Files), len(manifest.Files))
 		}
 	})
 }
@@ -118,7 +114,6 @@ func TestSaveAndLoadManifest(t *testing.T) {
 func TestManifestJSON(t *testing.T) {
 	manifest := &Manifest{
 		Version:     "1.0",
-		TotalHash:   "test-hash",
 		FileCount:   1,
 		GeneratedAt: "2024-01-01T00:00:00Z",
 		Files: []hash.FileInfo{
@@ -136,7 +131,6 @@ func TestManifestJSON(t *testing.T) {
 	jsonStr := string(data)
 	expectedFields := []string{
 		`"version": "1.0"`,
-		`"total_hash": "test-hash"`,
 		`"file_count": 1`,
 		`"generated_at": "2024-01-01T00:00:00Z"`,
 		`"path": "test.txt"`,
@@ -157,8 +151,8 @@ func TestManifestJSON(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 
-	if loaded.TotalHash != manifest.TotalHash {
-		t.Errorf("Unmarshaled TotalHash = %v, want %v", loaded.TotalHash, manifest.TotalHash)
+	if loaded.FileCount != manifest.FileCount {
+		t.Errorf("Unmarshaled FileCount = %v, want %v", loaded.FileCount, manifest.FileCount)
 	}
 }
 
@@ -197,7 +191,6 @@ func TestManifestVerify(t *testing.T) {
 func TestGetSummary(t *testing.T) {
 	manifest := &Manifest{
 		Version:     "1.0",
-		TotalHash:   "abc123",
 		FileCount:   10,
 		GeneratedAt: "2024-01-01T00:00:00Z",
 	}
@@ -207,7 +200,6 @@ func TestGetSummary(t *testing.T) {
 	expectedParts := []string{
 		"Version: 1.0",
 		"Generated: 2024-01-01T00:00:00Z",
-		"Total Hash: abc123",
 		"File Count: 10",
 	}
 
@@ -422,9 +414,6 @@ func TestGeneratorWithRateLimit(t *testing.T) {
 	}
 
 	// Results should be identical
-	if manifest1.TotalHash != manifest2.TotalHash {
-		t.Error("Rate limited generator should produce same hash")
-	}
 
 	if manifest1.FileCount != manifest2.FileCount {
 		t.Errorf("File count mismatch: %d vs %d", manifest1.FileCount, manifest2.FileCount)

@@ -191,8 +191,7 @@ func TestSymlinkSpoofingPrevention(t *testing.T) {
 			}
 		}
 
-		// Manually modify the total hash to force detailed comparison
-		manifest4.TotalHash = "force_detailed_check"
+		// Force detailed comparison by checking file modifications
 
 		// Verification should fail due to size difference
 		// (Now we check size for both symlinks and regular files for consistency)
@@ -239,7 +238,6 @@ func TestManifestVerifyWithTypeAndSize(t *testing.T) {
 	// Create a custom manifest to test verification logic
 	testManifest := &Manifest{
 		Version:     "1.0",
-		TotalHash:   "dummy", // Force detailed comparison
 		FileCount:   3,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Files: []hash.FileInfo{

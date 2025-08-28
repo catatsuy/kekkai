@@ -97,19 +97,17 @@ func TestFormatGenerationResult(t *testing.T) {
 			result: &GenerationResult{
 				Success:    true,
 				Timestamp:  time.Now().UTC().Format(time.RFC3339),
-				TotalHash:  "abc123def456",
 				FileCount:  42,
 				OutputPath: "/tmp/manifest.json",
 			},
 			format:   "text",
-			contains: []string{"✓", "successfully", "abc123def456", "42", "/tmp/manifest.json"},
+			contains: []string{"✓", "successfully", "42", "/tmp/manifest.json"},
 		},
 		{
 			name: "text format with S3",
 			result: &GenerationResult{
 				Success:   true,
 				Timestamp: time.Now().UTC().Format(time.RFC3339),
-				TotalHash: "xyz789",
 				FileCount: 10,
 				S3Key:     "production/app/manifest.json",
 			},
@@ -131,11 +129,10 @@ func TestFormatGenerationResult(t *testing.T) {
 			result: &GenerationResult{
 				Success:   true,
 				Timestamp: "2024-01-01T00:00:00Z",
-				TotalHash: "hash123",
 				FileCount: 5,
 			},
 			format:   "json",
-			contains: []string{`"success": true`, `"total_hash": "hash123"`, `"file_count": 5`},
+			contains: []string{`"success": true`, `"file_count": 5`},
 		},
 	}
 
@@ -217,7 +214,6 @@ func TestJSONMarshaling(t *testing.T) {
 		result := &GenerationResult{
 			Success:    true,
 			Timestamp:  "2024-01-01T00:00:00Z",
-			TotalHash:  "abc123",
 			FileCount:  5,
 			OutputPath: "/tmp/manifest.json",
 			S3Key:      "s3://bucket/key",
@@ -234,8 +230,8 @@ func TestJSONMarshaling(t *testing.T) {
 			t.Fatalf("json.Unmarshal() error = %v", err)
 		}
 
-		if unmarshaled.TotalHash != result.TotalHash {
-			t.Error("TotalHash field mismatch after unmarshaling")
+		if unmarshaled.FileCount != result.FileCount {
+			t.Error("FileCount field mismatch after unmarshaling")
 		}
 
 		if unmarshaled.S3Key != result.S3Key {

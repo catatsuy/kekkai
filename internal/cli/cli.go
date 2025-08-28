@@ -360,7 +360,6 @@ func (c *CLI) outputGenerateSuccess(m *manifest.Manifest, outputPath, s3Key, for
 	result := &output.GenerationResult{
 		Success:    true,
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		TotalHash:  m.TotalHash,
 		FileCount:  m.FileCount,
 		OutputPath: outputPath,
 		S3Key:      s3Key,

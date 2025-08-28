@@ -33,7 +33,6 @@ type FileInfo struct {
 
 // Result represents the result of hash calculation
 type Result struct {
-	TotalHash string     `json:"total_hash"`
 	Files     []FileInfo `json:"files"`
 	FileCount int        `json:"file_count"`
 }
@@ -229,11 +228,7 @@ func (c *Calculator) CalculateDirectory(ctx context.Context, rootDir string, exc
 		return fileInfos[i].Path < fileInfos[j].Path
 	})
 
-	// Calculate total hash
-	totalHash := c.calculateTotalHash(fileInfos)
-
 	return &Result{
-		TotalHash: totalHash,
 		Files:     fileInfos,
 		FileCount: len(fileInfos),
 	}, nil
@@ -445,20 +440,6 @@ func (c *Calculator) hashFileWithHasher(ctx context.Context, path string, hasher
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-// calculateTotalHash calculates the combined hash of all files
-func (c *Calculator) calculateTotalHash(files []FileInfo) string {
-	hasher := sha256.New()
-
-	for _, f := range files {
-		// Format: "path:hash:size\n"
-		// This ensures same files always produce same total hash
-		line := fmt.Sprintf("%s:%s:%d\n", f.Path, f.Hash, f.Size)
-		hasher.Write([]byte(line))
-	}
-
-	return hex.EncodeToString(hasher.Sum(nil))
-}
-
 // matchExcludePatterns checks if a path matches exclude patterns
 func matchExcludePatterns(path string, excludes []string) bool {
 	for _, pattern := range excludes {
@@ -518,12 +499,7 @@ func VerifyIntegrity(ctx context.Context, manifest *Result, targetDir string) er
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}
 
-	// Quick check with total hash
-	if manifest.TotalHash == current.TotalHash {
-		return nil // All files are intact
-	}
-
-	// Detailed comparison
+	// Compare file hashes
 	manifestMap := make(map[string]string)
 	for _, f := range manifest.Files {
 		manifestMap[f.Path] = f.Hash
@@ -577,12 +553,7 @@ func VerifyIntegrityWithPatterns(ctx context.Context, manifest *Result, targetDi
 		return fmt.Errorf("failed to calculate current hash: %w", err)
 	}
 
-	// Quick check with total hash
-	if manifest.TotalHash == current.TotalHash {
-		return nil // All files are intact
-	}
-
-	// Detailed comparison
+	// Compare file hashes
 	manifestMap := make(map[string]string)
 	for _, f := range manifest.Files {
 		manifestMap[f.Path] = f.Hash

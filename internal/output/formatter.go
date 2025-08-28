@@ -101,7 +101,6 @@ func (f *Formatter) formatText(result *VerificationResult) error {
 type GenerationResult struct {
 	Success    bool   `json:"success"`
 	Timestamp  string `json:"timestamp"`
-	TotalHash  string `json:"total_hash"`
 	FileCount  int    `json:"file_count"`
 	OutputPath string `json:"output_path,omitempty"`
 	S3Key      string `json:"s3_key,omitempty"`
@@ -118,7 +117,6 @@ func (f *Formatter) FormatGeneration(result *GenerationResult, format string) er
 	case "text":
 		if result.Success {
 			fmt.Fprintln(f.writer, "✓ Manifest generated successfully")
-			fmt.Fprintf(f.writer, "  Total Hash: %s\n", result.TotalHash)
 			fmt.Fprintf(f.writer, "  File Count: %d\n", result.FileCount)
 			if result.OutputPath != "" {
 				fmt.Fprintf(f.writer, "  Output: %s\n", result.OutputPath)

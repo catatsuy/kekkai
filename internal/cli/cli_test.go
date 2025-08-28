@@ -154,8 +154,8 @@ func TestCLIGenerate(t *testing.T) {
 				if !strings.Contains(stdout, `"version"`) {
 					t.Error("Output should contain version field")
 				}
-				if !strings.Contains(stdout, `"total_hash"`) {
-					t.Error("Output should contain total_hash field")
+				if !strings.Contains(stdout, `"file_count"`) {
+					t.Error("Output should contain file_count field")
 				}
 				if !strings.Contains(stdout, `"files"`) {
 					t.Error("Output should contain files field")
