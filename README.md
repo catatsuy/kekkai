@@ -453,6 +453,32 @@ Patterns are evaluated in this order:
 
 Kekkai has comprehensive symlink security to prevent attackers from hiding malicious changes:
 
+### Target Directory Behavior
+
+Kekkai handles symlinks differently depending on where they appear:
+
+#### When Target Itself Is a Symlink
+
+If `--target` points to a symlink (e.g., `/current` → `/releases/20240101`):
+- **Automatically resolved**: Uses `filepath.EvalSymlinks` to follow the symlink
+- **Operates on real path**: All operations happen in the resolved directory
+- **Transparent to user**: Works exactly as if you specified the real directory
+
+Example:
+```bash
+# These produce identical results:
+kekkai generate --target /var/www/current        # Symlink to /var/www/releases/20240101
+kekkai generate --target /var/www/releases/20240101  # Direct path
+```
+
+#### Symlinks Inside Target Directory
+
+For symlinks found within the target directory:
+- **Not followed**: Uses `os.Lstat` to detect them without following
+- **Tracked as symlinks**: Stored with `IsSymlink: true` flag
+- **Target recorded**: Link target path saved for verification
+- **Hash of target path**: Creates hash from `"symlink:" + target_path` string
+
 ### How Symlinks Are Processed
 
 1. **Detection**: Uses `os.Lstat` to identify symlinks without following them
