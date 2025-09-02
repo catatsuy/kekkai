@@ -25,7 +25,9 @@ Traditional tools like `tar` or file sync utilities (e.g., `rsync`) include meta
    - Application dependencies (vendor, node_modules) are monitored as they're part of the deployment
 
 3. **Symlink Security**
-   - Tracks symbolic links with their target paths
+   - Uses `os.Lstat` to properly detect symlinks without following them
+   - Tracks symbolic links with their target paths (via `os.Readlink`)
+   - Hashes the symlink target path itself, not the target's content
    - Detects when symlinks are modified to point to different targets
    - Detects when regular files are replaced with symlinks (and vice versa)
    - Prevents attackers from hiding malicious changes through symlink manipulation
@@ -372,6 +374,118 @@ Options:
   }
 }
 ```
+
+## Glob Pattern Handling
+
+Kekkai uses glob patterns for the `--exclude` option to skip specific files and directories during manifest generation.
+
+### Supported Patterns
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `*.ext` | Match files with specific extension | `*.log` matches `app.log`, `error.log` |
+| `dir/*` | Match all files in a directory | `logs/*` matches `logs/app.log` |
+| `dir/**` | Match all files recursively | `cache/**` matches `cache/data.db`, `cache/sessions/abc.txt` |
+| `**/*.ext` | Match extension at any depth | `**/*.pyc` matches `app.pyc`, `lib/utils.pyc` |
+| `**/dir/*` | Match directory at any depth | `**/logs/*` matches `logs/app.log`, `app/logs/error.log` |
+| `path/to/file` | Exact path match | `config/local.ini` matches only that file |
+
+### Pattern Matching Rules
+
+1. **Relative Paths**: All patterns match against relative paths from the target directory
+2. **Forward Slashes**: Always use `/` as path separator (even on Windows)
+3. **No Negation**: Patterns cannot be negated (no `!pattern` support)
+4. **Order Independent**: All patterns are evaluated, order doesn't matter
+5. **Immutable**: Exclude patterns cannot be changed during verification
+
+### Common Examples
+
+```bash
+# Laravel/Symfony
+--exclude "storage/**"          # User uploads
+--exclude "var/cache/**"        # Framework cache
+--exclude "var/log/**"          # Application logs
+--exclude "public/uploads/**"   # Uploaded files
+
+# Python/Django
+--exclude "**/__pycache__/**"   # Python cache
+--exclude "**/*.pyc"            # Compiled Python
+--exclude "media/**"            # User uploads
+--exclude "staticfiles/**"      # Collected static files
+
+# Node.js
+--exclude "*.log"               # Log files
+--exclude "tmp/**"              # Temporary files
+--exclude ".npm/**"             # NPM cache
+
+# General
+--exclude "*.tmp"               # Temporary files
+--exclude "*.bak"               # Backup files
+--exclude ".git/**"             # Git repository (if needed)
+```
+
+### Important Notes
+
+⚠️ **Do NOT exclude application dependencies**:
+- ❌ `--exclude "vendor/**"` (PHP dependencies)
+- ❌ `--exclude "node_modules/**"` (Node.js dependencies)
+- ❌ `--exclude "venv/**"` (Python virtual environment)
+
+These are part of your deployed application and must be monitored for tampering.
+
+✅ **Only exclude server-generated content**:
+- Log files
+- Cache directories
+- User uploads
+- Temporary files
+- NFS mounts
+
+### Pattern Evaluation
+
+Patterns are evaluated in this order:
+1. Check for `**` recursive matching
+2. Special case: `**/*` or `**` matches everything
+3. Suffix pattern: `dir/**` matches everything under `dir/`
+4. Prefix pattern: `**/*.ext` matches files with extension at any depth
+5. Simple glob: Standard shell glob matching with `*` and `?`
+
+## Symlink Handling
+
+Kekkai has comprehensive symlink security to prevent attackers from hiding malicious changes:
+
+### How Symlinks Are Processed
+
+1. **Detection**: Uses `os.Lstat` to identify symlinks without following them
+2. **Target Tracking**: Reads the link target with `os.Readlink`
+3. **Hash Calculation**: Creates hash from `"symlink:" + target_path` string
+4. **Verification**: Checks both link type and target path during verification
+
+### What Is Detected
+
+- ✅ Symlink target changes (e.g., `/usr/bin/php` → `/tmp/malicious`)
+- ✅ File type changes (regular file → symlink or symlink → regular file)
+- ✅ Broken symlinks (target doesn't exist)
+- ✅ New symlinks added to the directory
+- ✅ Deleted symlinks
+
+### Example
+
+```bash
+# Original deployment
+/app/config.php -> /etc/app/config.php  # Hash: abc123...
+
+# These changes will be detected:
+/app/config.php -> /tmp/fake-config.php  # Modified: different target
+/app/config.php (regular file)           # Modified: type change
+/app/config.php (deleted)                # Deleted: symlink removed
+```
+
+### Security Implications
+
+- Symlinks are never followed during hash calculation
+- Only the link itself is hashed, not the target's content
+- Prevents directory traversal attacks via symlink manipulation
+- Cache system skips symlinks (only caches regular files)
 
 ## Troubleshooting
 
