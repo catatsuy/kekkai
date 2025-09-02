@@ -416,24 +416,43 @@ A: Use `--rate-limit` to throttle I/O bandwidth. For example, `--rate-limit 1048
 Alternatively, you can use systemd to control resource usage at the OS level:
 
 ```bash
-# Run with limited CPU and I/O priority
+# Run with limited CPU and I/O priority (with cache support)
 systemd-run --quiet --wait --collect \
   -p Type=oneshot \
   -p CPUQuota=25% -p CPUWeight=100 \
+  -p PrivateTmp=no \
   /bin/bash -lc 'nice -n 10 ionice -c2 -n7 /usr/local/bin/kekkai verify \
     --s3-bucket my-manifests \
     --app-name myapp \
-    --target /srv/app'
+    --target /srv/app \
+    --use-cache \
+    --verify-probability 0.1'
 ```
 
 This approach provides more comprehensive resource control:
 - `CPUQuota=25%`: Limits CPU usage to 25%
 - `CPUWeight=100`: Sets CPU scheduling weight (lower priority)
+- `PrivateTmp=no`: Allows cache persistence in `/tmp` across runs
 - `nice -n 10`: Lower process priority
 - `ionice -c2 -n7`: Best-effort I/O scheduling with lowest priority
+- `--use-cache`: Enables cache for faster verification
+- `--verify-probability 0.1`: 10% chance to verify hash even with cache hit
 
-**Important**: When using `--use-cache` with `systemd-run`, be aware that systemd's `PrivateTmp=yes` creates an isolated `/tmp` directory. This means cache files won't persist between different systemd-run executions. To maintain cache persistence across runs, either:
-- Use `--cache-dir` to specify a persistent directory: `--cache-dir /var/cache/kekkai`
-- Or disable private temp in systemd: `-p PrivateTmp=no` (less secure)
+**Important**: The `PrivateTmp=no` setting is required when using `--use-cache` to ensure cache files persist between systemd-run executions. Without this, systemd creates an isolated `/tmp` directory for each run, preventing cache reuse. If you prefer stronger isolation, use `--cache-dir` to specify a persistent directory outside of `/tmp`:
+
+```bash
+# Alternative: Keep PrivateTmp=yes but use a custom cache directory
+systemd-run --quiet --wait --collect \
+  -p Type=oneshot \
+  -p CPUQuota=25% -p CPUWeight=100 \
+  -p PrivateTmp=yes \
+  /bin/bash -lc 'nice -n 10 ionice -c2 -n7 /usr/local/bin/kekkai verify \
+    --s3-bucket my-manifests \
+    --app-name myapp \
+    --target /srv/app \
+    --use-cache \
+    --cache-dir /var/cache/kekkai \
+    --verify-probability 0.1'
+```
 
 **Note**: With Go 1.25+, `CPUQuota` also automatically adjusts `GOMAXPROCS` to match the quota, so kekkai will use fewer worker threads when CPU is limited, providing better resource utilization.
