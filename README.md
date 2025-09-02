@@ -426,7 +426,8 @@ systemd-run --quiet --wait --collect \
     --app-name myapp \
     --target /srv/app \
     --use-cache \
-    --verify-probability 0.1'
+    --verify-probability 0.1 \
+    --rate-limit 10485760'
 ```
 
 This approach provides more comprehensive resource control:
@@ -437,6 +438,7 @@ This approach provides more comprehensive resource control:
 - `ionice -c2 -n7`: Best-effort I/O scheduling with lowest priority
 - `--use-cache`: Enables cache for faster verification
 - `--verify-probability 0.1`: 10% chance to verify hash even with cache hit
+- `--rate-limit 10485760`: Limits I/O to 10MB/s
 
 **Important**: The `PrivateTmp=no` setting is required when using `--use-cache` to ensure cache files persist between systemd-run executions. Without this, systemd creates an isolated `/tmp` directory for each run, preventing cache reuse. If you prefer stronger isolation, use `--cache-dir` to specify a persistent directory outside of `/tmp`:
 
@@ -452,7 +454,8 @@ systemd-run --quiet --wait --collect \
     --target /srv/app \
     --use-cache \
     --cache-dir /var/cache/kekkai \
-    --verify-probability 0.1'
+    --verify-probability 0.1 \
+    --rate-limit 10485760'
 ```
 
 **Note**: With Go 1.25+, `CPUQuota` also automatically adjusts `GOMAXPROCS` to match the quota, so kekkai will use fewer worker threads when CPU is limited, providing better resource utilization.
