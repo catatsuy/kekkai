@@ -16,3 +16,9 @@ func timeFromTimespec(ts syscall.Timespec) time.Time {
 func getCtime(stat *syscall.Stat_t) time.Time {
 	return timeFromTimespec(stat.Ctimespec)
 }
+
+// isTimeEqualPlatform implements Darwin-specific time comparison (exact)
+func isTimeEqualPlatform(t1, t2 time.Time) bool {
+	// Darwin APFS/HFS+ have nanosecond precision, use exact comparison
+	return t1.Equal(t2)
+}
