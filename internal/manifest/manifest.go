@@ -128,8 +128,9 @@ func (m *Manifest) VerifyWithRateLimit(ctx context.Context, targetDir string, nu
 }
 
 // VerifyWithCache checks integrity using cache with probabilistic verification
-func (m *Manifest) VerifyWithCache(ctx context.Context, targetDir, cacheDir, baseName, appName string, numWorkers int, verifyProbability float64) error {
+func (m *Manifest) VerifyWithCache(ctx context.Context, targetDir, cacheDir, baseName, appName string, numWorkers int, verifyProbability float64, debug bool) error {
 	calculator := hash.NewCalculator(numWorkers)
+	calculator.SetDebugMode(debug)
 	// Enable cache for the specified directory
 	manifestTime, _ := time.Parse(time.RFC3339, m.GeneratedAt)
 	if err := calculator.EnableMetadataCache(cacheDir, targetDir, baseName, appName, manifestTime); err != nil {
@@ -156,8 +157,9 @@ func (m *Manifest) VerifyWithCache(ctx context.Context, targetDir, cacheDir, bas
 }
 
 // VerifyWithCacheAndRateLimit combines cache verification with rate limiting
-func (m *Manifest) VerifyWithCacheAndRateLimit(ctx context.Context, targetDir, cacheDir, baseName, appName string, numWorkers int, bytesPerSec int64, verifyProbability float64) error {
+func (m *Manifest) VerifyWithCacheAndRateLimit(ctx context.Context, targetDir, cacheDir, baseName, appName string, numWorkers int, bytesPerSec int64, verifyProbability float64, debug bool) error {
 	calculator := hash.NewCalculatorWithRateLimit(numWorkers, bytesPerSec)
+	calculator.SetDebugMode(debug)
 	// Enable cache for the specified directory
 	manifestTime, _ := time.Parse(time.RFC3339, m.GeneratedAt)
 	if err := calculator.EnableMetadataCache(cacheDir, targetDir, baseName, appName, manifestTime); err != nil {
