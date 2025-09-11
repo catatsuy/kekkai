@@ -143,6 +143,8 @@ func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
 // EnableMetadataCache enables metadata caching for fast verification
 func (c *Calculator) EnableMetadataCache(cacheDir, targetDir, baseName, appName string, manifestTime time.Time) error {
 	c.metadataCache = cache.NewMetadataVerifier(cacheDir, targetDir, baseName, appName)
+	// Set debug mode if enabled
+	c.metadataCache.SetDebugMode(c.debugMode)
 	if err := c.metadataCache.Load(); err != nil {
 		// Log warning but continue (cache will be rebuilt)
 		fmt.Fprintf(os.Stderr, "Warning: failed to load cache: %v\n", err)
