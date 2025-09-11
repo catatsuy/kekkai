@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,14 +35,20 @@ type MetadataVerifier struct {
 	cachePath string
 	data      *MetadataCache
 	mu        sync.RWMutex
+	debug     bool // Enable debug logging
 }
 
 // NewMetadataVerifier creates a new metadata cache instance
 func NewMetadataVerifier(cacheDir, targetDir, baseName, appName string) *MetadataVerifier {
 	// Create cache filename with app-name and base-name (no target hash)
 	cachePath := filepath.Join(cacheDir, fmt.Sprintf(".kekkai-cache-%s-%s.json", baseName, appName))
+
+	// Enable debug if KEKKAI_DEBUG_CACHE environment variable is set
+	debug := os.Getenv("KEKKAI_DEBUG_CACHE") == "1"
+
 	return &MetadataVerifier{
 		cachePath: cachePath,
+		debug:     debug,
 	}
 }
 
@@ -118,45 +125,76 @@ func (v *MetadataVerifier) CheckMetadata(path string) (metadataMatches bool) {
 	defer v.mu.RUnlock()
 
 	if v.data == nil {
+		if v.debug {
+			log.Printf("[CACHE] %s: no cache data", path)
+		}
 		return false
 	}
 
 	entry, exists := v.data.Files[path]
 	if !exists {
+		if v.debug {
+			log.Printf("[CACHE] %s: not in cache", path)
+		}
 		return false
 	}
 
 	// Get current file stats
 	info, err := os.Lstat(path)
 	if err != nil {
+		if v.debug {
+			log.Printf("[CACHE] %s: stat error: %v", path, err)
+		}
 		return false
 	}
 
 	// Get system-specific stats
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
+		if v.debug {
+			log.Printf("[CACHE] %s: failed to get syscall stats", path)
+		}
 		return false
 	}
 
 	// Get ctime from system stats
 	ctime := getCtime(stat)
 
-	// Check all metadata
+	// Check all metadata with detailed logging
 	if info.Size() != entry.Size {
+		if v.debug {
+			log.Printf("[CACHE] %s: size mismatch - current: %d, cached: %d", path, info.Size(), entry.Size)
+		}
 		return false
 	}
 
 	if !info.ModTime().Equal(entry.ModTime) {
+		if v.debug {
+			log.Printf("[CACHE] %s: mtime mismatch - current: %v, cached: %v", path, info.ModTime(), entry.ModTime)
+		}
 		return false
 	}
 
 	// ctime is the most important - it can't be easily forged
 	// Use platform-specific comparison to handle filesystem timestamp precision issues
-	if !isTimeEqualPlatform(ctime, entry.CTime) {
+	ctimeEqual := isTimeEqualPlatform(ctime, entry.CTime)
+	if v.debug {
+		diff := ctime.Sub(entry.CTime)
+		log.Printf("[CACHE] %s: ctime check - current: %v, cached: %v, diff: %v, equal: %v",
+			path, ctime, entry.CTime, diff, ctimeEqual)
+	}
+
+	if !ctimeEqual {
+		if v.debug {
+			log.Printf("[CACHE] %s: ctime mismatch", path)
+		}
 		return false
 	}
 
 	// All metadata matches
+	if v.debug {
+		log.Printf("[CACHE] %s: HIT - all metadata matches", path)
+	}
 	return true
 }
 
