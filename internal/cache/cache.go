@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -35,8 +34,6 @@ type MetadataVerifier struct {
 	cachePath string
 	data      *MetadataCache
 	mu        sync.RWMutex
-	hitCount  int64 // Cache hit statistics (accessed atomically)
-	missCount int64 // Cache miss statistics (accessed atomically)
 }
 
 // NewMetadataVerifier creates a new metadata cache instance
@@ -126,21 +123,18 @@ func (v *MetadataVerifier) CheckMetadata(path string) (metadataMatches bool) {
 
 	entry, exists := v.data.Files[path]
 	if !exists {
-		atomic.AddInt64(&v.missCount, 1)
 		return false
 	}
 
 	// Get current file stats
 	info, err := os.Lstat(path)
 	if err != nil {
-		atomic.AddInt64(&v.missCount, 1)
 		return false
 	}
 
 	// Get system-specific stats
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		atomic.AddInt64(&v.missCount, 1)
 		return false
 	}
 
@@ -149,24 +143,20 @@ func (v *MetadataVerifier) CheckMetadata(path string) (metadataMatches bool) {
 
 	// Check all metadata
 	if info.Size() != entry.Size {
-		atomic.AddInt64(&v.missCount, 1)
 		return false
 	}
 
 	if !info.ModTime().Equal(entry.ModTime) {
-		atomic.AddInt64(&v.missCount, 1)
 		return false
 	}
 
 	// ctime is the most important - it can't be easily forged
 	// Use platform-specific comparison to handle filesystem timestamp precision issues
 	if !isTimeEqualPlatform(ctime, entry.CTime) {
-		atomic.AddInt64(&v.missCount, 1)
 		return false
 	}
 
 	// All metadata matches
-	atomic.AddInt64(&v.hitCount, 1)
 	return true
 }
 
@@ -288,15 +278,4 @@ func (v *MetadataVerifier) verifyCacheIntegrity(cache *MetadataCache) bool {
 	actualHash := hex.EncodeToString(hasher.Sum(nil))
 
 	return actualHash == expectedHash
-}
-
-// GetStats returns cache hit/miss statistics
-func (v *MetadataVerifier) GetStats() (hits, misses int64) {
-	return atomic.LoadInt64(&v.hitCount), atomic.LoadInt64(&v.missCount)
-}
-
-// ResetStats resets cache statistics
-func (v *MetadataVerifier) ResetStats() {
-	atomic.StoreInt64(&v.hitCount, 0)
-	atomic.StoreInt64(&v.missCount, 0)
 }
