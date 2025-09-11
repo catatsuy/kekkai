@@ -547,6 +547,8 @@ The cache file itself is protected with a hash to detect tampering.
 
 💡 **Cache Behavior:** By default, cache files are stored in the system temp directory (e.g., `/tmp` on Linux/macOS) and may be automatically cleaned by the system. This is intentional - the cache is designed to be ephemeral and will be recreated as needed for performance optimization.
 
+⚠️ **NFS Limitation:** Cache mode does not provide performance benefits on NFS-mounted directories. NFS clients may not reliably update ctime (change time) for metadata operations, causing cache misses even when files haven't actually changed. On NFS environments, disable cache mode (`--use-cache=false`) or expect minimal performance improvement. The ctime timestamp is crucial for cache security as it's difficult to forge, but NFS's distributed nature can cause inconsistencies in metadata timestamp updates.
+
 Note that application dependencies (vendor, node_modules) should still be verified as they are part of the deployed application.
 
 ### Q: System load is too high during verification

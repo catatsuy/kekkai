@@ -151,8 +151,7 @@ func (v *MetadataVerifier) CheckMetadata(path string) (metadataMatches bool) {
 	}
 
 	// ctime is the most important - it can't be easily forged
-	// Use platform-specific comparison to handle filesystem timestamp precision issues
-	if !isTimeEqualPlatform(ctime, entry.CTime) {
+	if !ctime.Equal(entry.CTime) {
 		return false
 	}
 
