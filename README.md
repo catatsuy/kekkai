@@ -557,9 +557,9 @@ Alternatively, you can use systemd to control resource usage at the OS level:
 
 ```bash
 # Run with limited CPU and I/O priority (with cache support)
-systemd-run --quiet --wait --collect \
+systemd-run --quiet --wait --pipe --collect \
   -p Type=oneshot \
-  -p CPUQuota=25% -p CPUWeight=100 \
+  -p CPUQuota=25% -p CPUWeight=50 \
   -p PrivateTmp=no \
   /bin/bash -lc 'nice -n 10 ionice -c2 -n7 /usr/local/bin/kekkai verify \
     --s3-bucket my-manifests \
@@ -572,7 +572,7 @@ systemd-run --quiet --wait --collect \
 
 This approach provides more comprehensive resource control:
 - `CPUQuota=25%`: Limits CPU usage to 25%
-- `CPUWeight=100`: Sets CPU scheduling weight (lower priority)
+- `CPUWeight=50`: Sets CPU scheduling weight (lower priority)
 - `PrivateTmp=no`: Allows cache persistence in `/tmp` across runs
 - `nice -n 10`: Lower process priority
 - `ionice -c2 -n7`: Best-effort I/O scheduling with lowest priority
@@ -584,9 +584,9 @@ This approach provides more comprehensive resource control:
 
 ```bash
 # Alternative: Keep PrivateTmp=yes but use a custom cache directory
-systemd-run --quiet --wait --collect \
+systemd-run --quiet --wait --pipe --collect \
   -p Type=oneshot \
-  -p CPUQuota=25% -p CPUWeight=100 \
+  -p CPUQuota=25% -p CPUWeight=50 \
   -p PrivateTmp=yes \
   /bin/bash -lc 'nice -n 10 ionice -c2 -n7 /usr/local/bin/kekkai verify \
     --s3-bucket my-manifests \
