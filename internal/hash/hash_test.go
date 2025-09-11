@@ -278,6 +278,73 @@ func TestMatchExcludePatterns(t *testing.T) {
 	}
 }
 
+func TestShouldSkipDirectory(t *testing.T) {
+	tests := []struct {
+		name     string
+		dirPath  string
+		excludes []string
+		expected bool
+	}{
+		{
+			name:     "skip logs directory with logs/**",
+			dirPath:  "logs",
+			excludes: []string{"logs/**"},
+			expected: true,
+		},
+		{
+			name:     "skip cache directory with cache/**",
+			dirPath:  "cache",
+			excludes: []string{"cache/**"},
+			expected: true,
+		},
+		{
+			name:     "skip nested logs directory with **/logs/**",
+			dirPath:  "app/logs",
+			excludes: []string{"**/logs/**"},
+			expected: true,
+		},
+		{
+			name:     "skip logs at root level with **/logs/**",
+			dirPath:  "logs",
+			excludes: []string{"**/logs/**"},
+			expected: true,
+		},
+		{
+			name:     "do not skip unrelated directory",
+			dirPath:  "src",
+			excludes: []string{"logs/**"},
+			expected: false,
+		},
+		{
+			name:     "skip everything with **",
+			dirPath:  "anything",
+			excludes: []string{"**"},
+			expected: true,
+		},
+		{
+			name:     "skip everything with **/*",
+			dirPath:  "anything",
+			excludes: []string{"**/*"},
+			expected: true,
+		},
+		{
+			name:     "no excludes",
+			dirPath:  "src",
+			excludes: nil,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := shouldSkipDirectory(tt.dirPath, tt.excludes)
+			if result != tt.expected {
+				t.Errorf("shouldSkipDirectory(%s) = %v, want %v", tt.dirPath, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestVerifyIntegrity(t *testing.T) {
 	calc := NewCalculator(0)
 

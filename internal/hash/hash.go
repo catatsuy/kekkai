@@ -243,12 +243,7 @@ func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, 
 			return err
 		}
 
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Get relative path
+		// Get relative path for checking exclude patterns
 		relPath, err := filepath.Rel(rootDir, path)
 		if err != nil {
 			return err
@@ -257,7 +252,21 @@ func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, 
 		// Normalize path (use forward slash even on Windows)
 		relPath = filepath.ToSlash(relPath)
 
-		// Check exclude patterns
+		// For directories, check if they should be skipped entirely
+		if info.IsDir() {
+			// Check if this directory matches exclude patterns
+			if matchExcludePatterns(relPath, excludes) {
+				return filepath.SkipDir // Skip entire directory tree
+			}
+			// Also check if this directory could contain excluded subdirectories
+			// For patterns like "logs/**", we want to skip the "logs" directory entirely
+			if shouldSkipDirectory(relPath, excludes) {
+				return filepath.SkipDir
+			}
+			return nil // Continue into this directory
+		}
+
+		// For files, check exclude patterns
 		if matchExcludePatterns(relPath, excludes) {
 			return nil
 		}
@@ -444,6 +453,40 @@ func (c *Calculator) hashFileWithHasher(ctx context.Context, path string, hasher
 func matchExcludePatterns(path string, excludes []string) bool {
 	for _, pattern := range excludes {
 		if matched := matchGlob(pattern, path); matched {
+			return true
+		}
+	}
+	return false
+}
+
+// shouldSkipDirectory checks if a directory should be skipped based on exclude patterns
+// This optimizes performance by skipping entire directory trees early
+func shouldSkipDirectory(dirPath string, excludes []string) bool {
+	for _, pattern := range excludes {
+		// Check for patterns that would match everything under this directory
+		// Examples:
+		// - "logs/**" should skip "logs" directory entirely
+		// - "cache/**" should skip "cache" directory entirely
+		// - "**/logs/**" should skip any "logs" directory at any level
+
+		// Pattern ends with /** - check if directory matches the prefix
+		if strings.HasSuffix(pattern, "/**") {
+			prefix := strings.TrimSuffix(pattern, "/**")
+
+			// Handle ** prefix patterns like "**/logs"
+			if strings.HasPrefix(prefix, "**/") {
+				dirName := strings.TrimPrefix(prefix, "**/")
+				if dirPath == dirName || strings.HasSuffix(dirPath, "/"+dirName) {
+					return true
+				}
+			} else if dirPath == prefix {
+				// Exact directory match
+				return true
+			}
+		}
+
+		// Pattern is just ** - matches everything
+		if pattern == "**" || pattern == "**/*" {
 			return true
 		}
 	}
