@@ -46,6 +46,7 @@ type Calculator struct {
 	metadataCache     *cache.MetadataVerifier // Optional metadata cache for fast verification
 	verifyProbability float64                 // Probability of hash verification (0.0-1.0)
 	manifestHashes    map[string]string       // Optional manifest hashes for cache-based verification
+	debugMode         bool                    // Enable debug output for cache behavior
 }
 
 // throttledCopy performs io.CopyBuffer with rate limiting
@@ -142,6 +143,8 @@ func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
 // EnableMetadataCache enables metadata caching for fast verification
 func (c *Calculator) EnableMetadataCache(cacheDir, targetDir, baseName, appName string, manifestTime time.Time) error {
 	c.metadataCache = cache.NewMetadataVerifier(cacheDir, targetDir, baseName, appName)
+	// Set debug mode if enabled
+	c.metadataCache.SetDebugMode(c.debugMode)
 	if err := c.metadataCache.Load(); err != nil {
 		// Log warning but continue (cache will be rebuilt)
 		fmt.Fprintf(os.Stderr, "Warning: failed to load cache: %v\n", err)
@@ -172,6 +175,11 @@ func (c *Calculator) SetVerifyProbability(p float64) {
 // SetManifestHashes sets the manifest hashes for cache-based verification
 func (c *Calculator) SetManifestHashes(hashes map[string]string) {
 	c.manifestHashes = hashes
+}
+
+// SetDebugMode enables or disables debug output for cache behavior
+func (c *Calculator) SetDebugMode(debug bool) {
+	c.debugMode = debug
 }
 
 // UpdateCacheForFiles updates cache entries for all provided files
@@ -326,14 +334,32 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 									if manifestHash, ok := c.manifestHashes[relPath]; ok {
 										fileHash = manifestHash
 										needHashCalculation = false
+										if c.debugMode {
+											fmt.Fprintf(os.Stderr, "[CACHE] %s: HIT (using cached hash)\n", relPath)
+										}
 									}
 								} else {
 									// No manifest hashes, skip calculation anyway
 									needHashCalculation = false
+									if c.debugMode {
+										fmt.Fprintf(os.Stderr, "[CACHE] %s: HIT (no manifest hash available)\n", relPath)
+									}
+								}
+							} else {
+								if c.debugMode {
+									fmt.Fprintf(os.Stderr, "[CACHE] %s: HIT but verifying due to probability (%.1f)\n", relPath, c.verifyProbability)
 								}
 							}
 							// else: probabilistically verify even with cache hit
+						} else {
+							if c.debugMode {
+								fmt.Fprintf(os.Stderr, "[CACHE] %s: MISS (metadata mismatch)\n", relPath)
+							}
 						}
+					} else if c.debugMode && info.Mode()&os.ModeSymlink != 0 {
+						fmt.Fprintf(os.Stderr, "[CACHE] %s: SKIP (symlink)\n", relPath)
+					} else if c.debugMode && c.metadataCache == nil {
+						fmt.Fprintf(os.Stderr, "[CACHE] %s: SKIP (cache disabled)\n", relPath)
 					}
 
 					// Handle symlinks or calculate hash if needed

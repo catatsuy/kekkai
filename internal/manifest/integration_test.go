@@ -385,7 +385,7 @@ func TestManifestGenerationAndVerificationPerformance(t *testing.T) {
 	// Test cache-based verification performance
 	cacheDir := t.TempDir()
 	start = time.Now()
-	err = manifest.VerifyWithCache(ctx, tempDir, cacheDir, "test", "app", 4, 0.1)
+	err = manifest.VerifyWithCache(ctx, tempDir, cacheDir, "test", "app", 4, 0.1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +395,7 @@ func TestManifestGenerationAndVerificationPerformance(t *testing.T) {
 
 	// Second cache verification should be faster
 	start = time.Now()
-	err = manifest.VerifyWithCache(ctx, tempDir, cacheDir, "test", "app", 4, 0.0)
+	err = manifest.VerifyWithCache(ctx, tempDir, cacheDir, "test", "app", 4, 0.0, false)
 	if err != nil {
 		t.Fatal(err)
 	}

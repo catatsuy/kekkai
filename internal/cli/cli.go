@@ -235,6 +235,7 @@ func (c *CLI) runVerify(args []string) int {
 		useCache          bool
 		cacheDir          string
 		verifyProbability float64
+		debug             bool
 		help              bool
 	)
 
@@ -254,6 +255,7 @@ func (c *CLI) runVerify(args []string) int {
 	flags.BoolVar(&useCache, "use-cache", false, "Enable local cache for verification (checks size, mtime, ctime)")
 	flags.StringVar(&cacheDir, "cache-dir", "", "Directory for cache file (default: system temp directory)")
 	flags.Float64Var(&verifyProbability, "verify-probability", 0.1, "Probability of hash verification even with cache hit (0.0-1.0, default: 0.1)")
+	flags.BoolVar(&debug, "debug", false, "Enable debug output for cache behavior")
 	flags.BoolVar(&help, "help", false, "Show help for verify command")
 	flags.BoolVar(&help, "h", false, "Show help for verify command")
 
@@ -332,9 +334,9 @@ func (c *CLI) runVerify(args []string) int {
 
 		// Use cache with probabilistic verification
 		if rateLimit > 0 {
-			err = m.VerifyWithCacheAndRateLimit(ctx, target, cacheDirToUse, basePath, appName, workers, rateLimit, verifyProbability)
+			err = m.VerifyWithCacheAndRateLimit(ctx, target, cacheDirToUse, basePath, appName, workers, rateLimit, verifyProbability, debug)
 		} else {
-			err = m.VerifyWithCache(ctx, target, cacheDirToUse, basePath, appName, workers, verifyProbability)
+			err = m.VerifyWithCache(ctx, target, cacheDirToUse, basePath, appName, workers, verifyProbability, debug)
 		}
 	} else {
 		// Normal verify mode: calculate all hashes
