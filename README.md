@@ -563,6 +563,7 @@ systemd-run --quiet --wait --pipe --collect \
   -p Type=oneshot \
   -p CPUQuota=25% -p CPUWeight=50 \
   -p PrivateTmp=no \
+  -p User=nobody \
   /bin/bash -lc 'nice -n 10 ionice -c2 -n7 /usr/local/bin/kekkai verify \
     --s3-bucket my-manifests \
     --app-name myapp \
@@ -576,6 +577,7 @@ This approach provides more comprehensive resource control:
 - `CPUQuota=25%`: Limits CPU usage to 25%
 - `CPUWeight=50`: Sets CPU scheduling weight (lower priority)
 - `PrivateTmp=no`: Allows cache persistence in `/tmp` across runs
+- `User=nobody`: Runs with minimal privileges for security
 - `nice -n 10`: Lower process priority
 - `ionice -c2 -n7`: Best-effort I/O scheduling with lowest priority
 - `--use-cache`: Enables cache for faster verification
@@ -590,6 +592,7 @@ systemd-run --quiet --wait --pipe --collect \
   -p Type=oneshot \
   -p CPUQuota=25% -p CPUWeight=50 \
   -p PrivateTmp=yes \
+  -p User=nobody \
   /bin/bash -lc 'nice -n 10 ionice -c2 -n7 /usr/local/bin/kekkai verify \
     --s3-bucket my-manifests \
     --app-name myapp \
@@ -599,5 +602,7 @@ systemd-run --quiet --wait --pipe --collect \
     --verify-probability 0.1 \
     --rate-limit 10485760'
 ```
+
+**Security Recommendation**: Always run kekkai verification with minimal privileges using `-p User=nobody` or a dedicated non-privileged user. This follows the principle of least privilege and reduces the security impact if the process is compromised.
 
 **Note**: With Go 1.25+, `CPUQuota` also automatically adjusts `GOMAXPROCS` to match the quota, so kekkai will use fewer worker threads when CPU is limited, providing better resource utilization.
