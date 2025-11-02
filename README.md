@@ -4,6 +4,10 @@ A simple and fast Go tool for file integrity monitoring. Detects unauthorized fi
 
 The name "Kekkai" comes from the Japanese word 結界 (kekkai), meaning "barrier" - a protective boundary that keeps unwanted things out, perfectly representing this tool's purpose of protecting your files from tampering.
 
+## Takumi, the AI offensive security engineer
+
+<a href="https://flatt.tech/oss/gmo/trampoline" target="_blank"><img src="https://flatt.tech/assets/images/badges/gmo-oss.svg" height="24px"/></a>
+
 ## Design Philosophy
 
 Kekkai was designed to solve specific challenges in production server environments:
