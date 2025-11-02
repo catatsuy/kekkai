@@ -36,7 +36,7 @@ func TestCalculator_WithMetadataCache(t *testing.T) {
 	// Create calculator with cache
 	calculator := NewCalculator(2)
 	manifestTime := time.Now().Add(-1 * time.Hour)
-	err := calculator.EnableMetadataCache(cacheDir, tempDir, "test", "app", manifestTime)
+	err := calculator.EnableMetadataCache(cacheDir, "test", "app", manifestTime)
 	if err != nil {
 		t.Fatalf("EnableMetadataCache() failed: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestCalculator_WithMetadataCache(t *testing.T) {
 
 	// Create new calculator with same cache
 	calculator2 := NewCalculator(2)
-	err = calculator2.EnableMetadataCache(cacheDir, tempDir, "test", "app", manifestTime)
+	err = calculator2.EnableMetadataCache(cacheDir, "test", "app", manifestTime)
 	if err != nil {
 		t.Fatalf("EnableMetadataCache() failed: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestCalculator_CacheWithFileModification(t *testing.T) {
 	// Create calculator with cache
 	calculator := NewCalculator(1)
 	manifestTime := time.Now().Add(-1 * time.Hour)
-	err = calculator.EnableMetadataCache(cacheDir, tempDir, "test", "app", manifestTime)
+	err = calculator.EnableMetadataCache(cacheDir, "test", "app", manifestTime)
 	if err != nil {
 		t.Fatalf("EnableMetadataCache() failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestCalculator_CacheWithFileModification(t *testing.T) {
 
 	// Create new calculator
 	calculator2 := NewCalculator(1)
-	err = calculator2.EnableMetadataCache(cacheDir, tempDir, "test", "app", manifestTime)
+	err = calculator2.EnableMetadataCache(cacheDir, "test", "app", manifestTime)
 	if err != nil {
 		t.Fatalf("EnableMetadataCache() failed: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestCalculator_ProbabilisticVerification(t *testing.T) {
 	// Create calculator with cache
 	calculator := NewCalculator(1)
 	manifestTime := time.Now().Add(-1 * time.Hour)
-	err = calculator.EnableMetadataCache(cacheDir, tempDir, "test", "app", manifestTime)
+	err = calculator.EnableMetadataCache(cacheDir, "test", "app", manifestTime)
 	if err != nil {
 		t.Fatalf("EnableMetadataCache() failed: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestCalculator_ProbabilisticVerification(t *testing.T) {
 	for _, prob := range probabilities {
 		t.Run(fmt.Sprintf("prob_%.1f", prob), func(t *testing.T) {
 			calculator2 := NewCalculator(1)
-			err = calculator2.EnableMetadataCache(cacheDir, tempDir, "test", "app", manifestTime)
+			err = calculator2.EnableMetadataCache(cacheDir, "test", "app", manifestTime)
 			if err != nil {
 				t.Fatalf("EnableMetadataCache() failed: %v", err)
 			}
@@ -281,7 +281,7 @@ func TestCalculator_CacheInvalidation(t *testing.T) {
 	oldManifestTime := time.Now().Add(-2 * time.Hour)
 
 	calculator := NewCalculator(1)
-	err = calculator.EnableMetadataCache(cacheDir, tempDir, "test", "app", oldManifestTime)
+	err = calculator.EnableMetadataCache(cacheDir, "test", "app", oldManifestTime)
 	if err != nil {
 		t.Fatalf("EnableMetadataCache() failed: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestCalculator_CacheInvalidation(t *testing.T) {
 	newManifestTime := time.Now().Add(30 * time.Minute) // Future time
 
 	calculator2 := NewCalculator(1)
-	err = calculator2.EnableMetadataCache(cacheDir, tempDir, "test", "app", newManifestTime)
+	err = calculator2.EnableMetadataCache(cacheDir, "test", "app", newManifestTime)
 	if err != nil {
 		t.Fatalf("EnableMetadataCache() failed: %v", err)
 	}
