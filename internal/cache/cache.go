@@ -32,19 +32,35 @@ type MetadataEntry struct {
 
 // MetadataVerifier manages metadata verification cache
 type MetadataVerifier struct {
+	cacheDir  string
 	cachePath string
 	data      *MetadataCache
 	mu        sync.RWMutex
 	debug     bool // Enable debug output
 }
 
-// NewMetadataVerifier creates a new metadata cache instance
-func NewMetadataVerifier(cacheDir, targetDir, baseName, appName string) *MetadataVerifier {
+// NewMetadataVerifier creates a new metadata cache instance. When cacheDir is empty,
+// files are stored in os.TempDir. If cacheDir is provided it must be an existing directory.
+func NewMetadataVerifier(cacheDir, baseName, appName string) (*MetadataVerifier, error) {
 	// Create cache filename with app-name and base-name (no target hash)
-	cachePath := filepath.Join(cacheDir, fmt.Sprintf(".kekkai-cache-%s-%s.json", baseName, appName))
-	return &MetadataVerifier{
-		cachePath: cachePath,
+	fileName := fmt.Sprintf(".kekkai-cache-%s-%s.json", baseName, appName)
+
+	if cacheDir == "" {
+		cacheDir = os.TempDir()
+	} else {
+		info, err := os.Stat(cacheDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat cache dir %q: %w", cacheDir, err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("cache dir %q is not a directory", cacheDir)
+		}
 	}
+
+	return &MetadataVerifier{
+		cacheDir:  cacheDir,
+		cachePath: filepath.Join(cacheDir, fileName),
+	}, nil
 }
 
 // SetDebugMode enables or disables debug output
@@ -258,7 +274,7 @@ func (v *MetadataVerifier) Save() error {
 	}
 
 	// Write atomically using rename
-	tempFile, err := os.CreateTemp(filepath.Dir(v.cachePath), "kekkai-cache-*")
+	tempFile, err := os.CreateTemp(v.cacheDir, "kekkai-cache-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp cache file: %w", err)
 	}

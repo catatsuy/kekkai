@@ -146,8 +146,12 @@ func normalizeWorkerCount(numWorkers int) int {
 }
 
 // EnableMetadataCache enables metadata caching for fast verification
-func (c *Calculator) EnableMetadataCache(cacheDir, targetDir, baseName, appName string, manifestTime time.Time) error {
-	c.metadataCache = cache.NewMetadataVerifier(cacheDir, targetDir, baseName, appName)
+func (c *Calculator) EnableMetadataCache(cacheDir, baseName, appName string, manifestTime time.Time) error {
+	verifier, err := cache.NewMetadataVerifier(cacheDir, baseName, appName)
+	if err != nil {
+		return err
+	}
+	c.metadataCache = verifier
 	// Set debug mode if enabled
 	c.metadataCache.SetDebugMode(c.debugMode)
 	if err := c.metadataCache.Load(); err != nil {

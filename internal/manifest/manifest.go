@@ -133,7 +133,7 @@ func (m *Manifest) VerifyWithCache(ctx context.Context, targetDir, cacheDir, bas
 	calculator.SetDebugMode(debug)
 	// Enable cache for the specified directory
 	manifestTime, _ := time.Parse(time.RFC3339, m.GeneratedAt)
-	if err := calculator.EnableMetadataCache(cacheDir, targetDir, baseName, appName, manifestTime); err != nil {
+	if err := calculator.EnableMetadataCache(cacheDir, baseName, appName, manifestTime); err != nil {
 		return fmt.Errorf("failed to enable cache: %w", err)
 	}
 	calculator.SetVerifyProbability(verifyProbability)
@@ -162,7 +162,7 @@ func (m *Manifest) VerifyWithCacheAndRateLimit(ctx context.Context, targetDir, c
 	calculator.SetDebugMode(debug)
 	// Enable cache for the specified directory
 	manifestTime, _ := time.Parse(time.RFC3339, m.GeneratedAt)
-	if err := calculator.EnableMetadataCache(cacheDir, targetDir, baseName, appName, manifestTime); err != nil {
+	if err := calculator.EnableMetadataCache(cacheDir, baseName, appName, manifestTime); err != nil {
 		return fmt.Errorf("failed to enable cache: %w", err)
 	}
 	calculator.SetVerifyProbability(verifyProbability)
