@@ -258,9 +258,27 @@ func (v *MetadataVerifier) Save() error {
 	}
 
 	// Write atomically using rename
-	tempPath := v.cachePath + ".tmp"
-	if err := os.WriteFile(tempPath, finalData, 0644); err != nil {
+	tempFile, err := os.CreateTemp(filepath.Dir(v.cachePath), "kekkai-cache-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp cache file: %w", err)
+	}
+	tempPath := tempFile.Name()
+
+	if _, err := tempFile.Write(finalData); err != nil {
+		tempFile.Close()
+		os.Remove(tempPath)
 		return fmt.Errorf("failed to write cache: %w", err)
+	}
+
+	if err := tempFile.Chmod(0600); err != nil {
+		tempFile.Close()
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to set cache permissions: %w", err)
+	}
+
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to close cache file: %w", err)
 	}
 
 	if err := os.Rename(tempPath, v.cachePath); err != nil {
