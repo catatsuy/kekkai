@@ -63,6 +63,32 @@ func (i *arrayFlags) Set(value string) error {
 	return nil
 }
 
+// validateIdentifier ensures CLI-provided identifiers are safe for filesystem/S3 usage and returns the original value when valid.
+func validateIdentifier(value, fieldName string) (string, error) {
+	if value == "" {
+		return value, nil
+	}
+	if value == "." || value == ".." {
+		return "", fmt.Errorf("%s cannot be '.' or '..'", fieldName)
+	}
+	if strings.ContainsAny(value, `/\`) {
+		return "", fmt.Errorf("%s cannot contain path separators", fieldName)
+	}
+	for _, ch := range value {
+		if ch > 127 {
+			return "", fmt.Errorf("%s contains non-ASCII character %q", fieldName, ch)
+		}
+		if (ch >= 'a' && ch <= 'z') ||
+			(ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') ||
+			ch == '-' || ch == '_' {
+			continue
+		}
+		return "", fmt.Errorf("%s contains invalid character %q", fieldName, ch)
+	}
+	return value, nil
+}
+
 // Run executes the CLI
 func (c *CLI) Run(args []string) int {
 	if len(args) <= 1 {
@@ -133,6 +159,15 @@ func (c *CLI) runGenerate(args []string) int {
 	if help {
 		c.printGenerateHelp(flags)
 		return ExitCodeOK
+	}
+
+	if basePath, err = validateIdentifier(basePath, "base-path"); err != nil {
+		fmt.Fprintf(c.errStream, "Error: %v\n", err)
+		return ExitCodeFail
+	}
+	if appName, err = validateIdentifier(appName, "app-name"); err != nil {
+		fmt.Fprintf(c.errStream, "Error: %v\n", err)
+		return ExitCodeFail
 	}
 
 	// Validate rate limit
@@ -267,6 +302,15 @@ func (c *CLI) runVerify(args []string) int {
 	if help {
 		c.printVerifyHelp(flags)
 		return ExitCodeOK
+	}
+
+	if basePath, err = validateIdentifier(basePath, "base-path"); err != nil {
+		fmt.Fprintf(c.errStream, "Error: %v\n", err)
+		return ExitCodeFail
+	}
+	if appName, err = validateIdentifier(appName, "app-name"); err != nil {
+		fmt.Fprintf(c.errStream, "Error: %v\n", err)
+		return ExitCodeFail
 	}
 
 	// Validate rate limit

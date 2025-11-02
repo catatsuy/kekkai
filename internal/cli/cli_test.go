@@ -120,6 +120,60 @@ func TestCLIHelp(t *testing.T) {
 	}
 }
 
+func TestCLIIdentifierValidation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	cli := NewCLI(&stdout, &stderr)
+
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "verify invalid base-path",
+			args:    []string{"kekkai", "verify", "--manifest", "manifest.json", "--base-path", "../production", "--app-name", "app"},
+			wantErr: "base-path cannot contain path separators",
+		},
+		{
+			name:    "verify invalid app-name",
+			args:    []string{"kekkai", "verify", "--manifest", "manifest.json", "--app-name", "???"},
+			wantErr: "app-name contains invalid character",
+		},
+		{
+			name:    "verify app-name with dot",
+			args:    []string{"kekkai", "verify", "--manifest", "manifest.json", "--app-name", "app.name"},
+			wantErr: "app-name contains invalid character",
+		},
+		{
+			name:    "generate non-ascii base-path",
+			args:    []string{"kekkai", "generate", "--target", ".", "--base-path", "開発"},
+			wantErr: "base-path contains non-ASCII character",
+		},
+		{
+			name:    "generate base-path with space",
+			args:    []string{"kekkai", "generate", "--target", ".", "--base-path", "my env"},
+			wantErr: "base-path contains invalid character",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout.Reset()
+			stderr.Reset()
+
+			exitCode := cli.Run(tt.args)
+			if exitCode != ExitCodeFail {
+				t.Fatalf("Run() exit code = %v, want ExitCodeFail", exitCode)
+			}
+
+			errOut := stderr.String()
+			if !strings.Contains(errOut, tt.wantErr) {
+				t.Fatalf("Expected error output to contain %q, got %q", tt.wantErr, errOut)
+			}
+		})
+	}
+}
+
 func TestCLIGenerate(t *testing.T) {
 	// Create test directory
 	tempDir := t.TempDir()
