@@ -330,7 +330,7 @@ Options:
   -base-path string   S3 base path (default "development")
   -app-name string    Application name (creates path: {base-path}/{app-name}/manifest.json)
   -format string      Output format: text, json (default "text")
-  -workers int        Number of worker threads (0 = auto detect)
+  -workers int        Number of worker threads (0 = auto detect, capped at CPU count)
   -rate-limit int     Rate limit in bytes per second (0 = no limit)
   -timeout int        Timeout in seconds (default: 300)
 ```
@@ -348,7 +348,7 @@ Options:
   -app-name string    Application name (reads from: {base-path}/{app-name}/manifest.json)
   -target string      Target directory to verify (default ".")
   -format string      Output format: text, json (default "text")
-  -workers int              Number of worker threads (0 = auto detect)
+  -workers int              Number of worker threads (0 = auto detect, capped at CPU count)
   -rate-limit int           Rate limit in bytes per second (0 = no limit)
   -timeout int              Timeout in seconds (default: 300)
   -use-cache                Enable local cache for verification (checks size, mtime, ctime)
