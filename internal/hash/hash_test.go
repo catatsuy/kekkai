@@ -12,25 +12,40 @@ import (
 )
 
 func TestNewCalculator(t *testing.T) {
+	maxWorkers := runtime.GOMAXPROCS(0)
+	if maxWorkers < 1 {
+		maxWorkers = 1
+	}
+
+	withinCap := maxWorkers
+	if withinCap > 1 {
+		withinCap = maxWorkers - 1
+	}
+
 	tests := []struct {
 		name            string
 		numWorkers      int
 		expectedWorkers int
 	}{
 		{
-			name:            "positive worker count",
-			numWorkers:      4,
-			expectedWorkers: 4,
+			name:            "positive worker count within cap",
+			numWorkers:      withinCap,
+			expectedWorkers: withinCap,
+		},
+		{
+			name:            "positive worker count capped at CPU limit",
+			numWorkers:      maxWorkers + 10,
+			expectedWorkers: maxWorkers,
 		},
 		{
 			name:            "zero worker count defaults to GOMAXPROCS",
 			numWorkers:      0,
-			expectedWorkers: runtime.GOMAXPROCS(0),
+			expectedWorkers: maxWorkers,
 		},
 		{
 			name:            "negative worker count defaults to GOMAXPROCS",
 			numWorkers:      -1,
-			expectedWorkers: runtime.GOMAXPROCS(0),
+			expectedWorkers: maxWorkers,
 		},
 	}
 
@@ -797,6 +812,16 @@ func TestRateLimitedCalculation(t *testing.T) {
 }
 
 func TestNewCalculatorWithRateLimit(t *testing.T) {
+	maxWorkers := runtime.GOMAXPROCS(0)
+	if maxWorkers < 1 {
+		maxWorkers = 1
+	}
+
+	withinCap := maxWorkers
+	if withinCap > 1 {
+		withinCap = maxWorkers - 1
+	}
+
 	tests := []struct {
 		name          string
 		numWorkers    int
@@ -805,24 +830,31 @@ func TestNewCalculatorWithRateLimit(t *testing.T) {
 		expectLimit   bool
 	}{
 		{
-			name:          "with rate limit",
-			numWorkers:    4,
+			name:          "with rate limit within cap",
+			numWorkers:    withinCap,
 			bytesPerSec:   1024 * 1024, // 1MB/s
-			expectWorkers: 4,
+			expectWorkers: withinCap,
 			expectLimit:   true,
 		},
 		{
 			name:          "no rate limit",
-			numWorkers:    2,
+			numWorkers:    withinCap,
 			bytesPerSec:   0,
-			expectWorkers: 2,
+			expectWorkers: withinCap,
 			expectLimit:   false,
+		},
+		{
+			name:          "worker count capped at CPU limit",
+			numWorkers:    maxWorkers + 10,
+			bytesPerSec:   1024 * 1024, // 1MB/s
+			expectWorkers: maxWorkers,
+			expectLimit:   true,
 		},
 		{
 			name:          "auto workers with rate limit",
 			numWorkers:    0,
 			bytesPerSec:   512 * 1024, // 512KB/s
-			expectWorkers: runtime.GOMAXPROCS(0),
+			expectWorkers: maxWorkers,
 			expectLimit:   true,
 		},
 	}

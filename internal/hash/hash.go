@@ -105,10 +105,7 @@ func throttledCopy(ctx context.Context, dst io.Writer, src io.Reader, buf []byte
 
 // NewCalculator creates a calculator with custom worker count
 func NewCalculator(numWorkers int) *Calculator {
-	if numWorkers <= 0 {
-		numWorkers = runtime.GOMAXPROCS(0)
-	}
-
+	numWorkers = normalizeWorkerCount(numWorkers)
 	return &Calculator{
 		numWorkers:  numWorkers,
 		bufferSize:  1024 * 1024, // 1MB buffer
@@ -118,9 +115,7 @@ func NewCalculator(numWorkers int) *Calculator {
 
 // NewCalculatorWithRateLimit creates a calculator with rate limiting
 func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
-	if numWorkers <= 0 {
-		numWorkers = runtime.GOMAXPROCS(0)
-	}
+	numWorkers = normalizeWorkerCount(numWorkers)
 
 	var limiter *rate.Limiter
 	if bytesPerSec > 0 {
@@ -138,6 +133,16 @@ func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
 		bytesPerSec: bytesPerSec,
 		limiter:     limiter,
 	}
+}
+
+func normalizeWorkerCount(numWorkers int) int {
+	maxWorkers := max(runtime.GOMAXPROCS(0), 1)
+
+	if numWorkers <= 0 {
+		return maxWorkers
+	}
+
+	return min(numWorkers, maxWorkers)
 }
 
 // EnableMetadataCache enables metadata caching for fast verification
