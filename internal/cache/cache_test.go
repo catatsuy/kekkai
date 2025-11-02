@@ -7,13 +7,21 @@ import (
 	"time"
 )
 
+func newTestVerifier(t *testing.T, cacheDir, baseName, appName string) *MetadataVerifier {
+	t.Helper()
+	verifier, err := NewMetadataVerifier(cacheDir, baseName, appName)
+	if err != nil {
+		t.Fatalf("NewMetadataVerifier() returned error: %v", err)
+	}
+	return verifier
+}
+
 func TestMetadataVerifier_NewAndLoad(t *testing.T) {
 	// Create temporary directory for cache
 	tempDir := t.TempDir()
-	targetDir := t.TempDir()
 
 	// Create new verifier
-	verifier := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier := newTestVerifier(t, tempDir, "test", "app")
 
 	// Load should work even if file doesn't exist (creates empty cache)
 	err := verifier.Load()
@@ -33,10 +41,9 @@ func TestMetadataVerifier_NewAndLoad(t *testing.T) {
 
 func TestMetadataVerifier_SaveAndLoad(t *testing.T) {
 	tempDir := t.TempDir()
-	targetDir := t.TempDir()
 
 	// Create verifier and load
-	verifier := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier := newTestVerifier(t, tempDir, "test", "app")
 	err := verifier.Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
@@ -53,7 +60,7 @@ func TestMetadataVerifier_SaveAndLoad(t *testing.T) {
 	}
 
 	// Create new verifier and load saved data
-	verifier2 := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier2 := newTestVerifier(t, tempDir, "test", "app")
 	err = verifier2.Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
@@ -87,7 +94,7 @@ func TestMetadataVerifier_UpdateAndCheckMetadata(t *testing.T) {
 	}
 
 	// Create verifier
-	verifier := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier := newTestVerifier(t, tempDir, "test", "app")
 	err = verifier.Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
@@ -127,9 +134,8 @@ func TestMetadataVerifier_UpdateAndCheckMetadata(t *testing.T) {
 
 func TestMetadataVerifier_ManifestValidity(t *testing.T) {
 	tempDir := t.TempDir()
-	targetDir := t.TempDir()
 
-	verifier := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier := newTestVerifier(t, tempDir, "test", "app")
 	err := verifier.Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
@@ -165,7 +171,7 @@ func TestMetadataVerifier_Clear(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	verifier := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier := newTestVerifier(t, tempDir, "test", "app")
 	err = verifier.Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
@@ -197,7 +203,6 @@ func TestMetadataVerifier_Clear(t *testing.T) {
 
 func TestMetadataVerifier_CacheFilename(t *testing.T) {
 	tempDir := t.TempDir()
-	targetDir := t.TempDir()
 
 	tests := []struct {
 		baseName     string
@@ -211,7 +216,7 @@ func TestMetadataVerifier_CacheFilename(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.baseName+"-"+tt.appName, func(t *testing.T) {
-			verifier := NewMetadataVerifier(tempDir, targetDir, tt.baseName, tt.appName)
+			verifier := newTestVerifier(t, tempDir, tt.baseName, tt.appName)
 			expectedPath := filepath.Join(tempDir, tt.expectedFile)
 
 			if verifier.cachePath != expectedPath {
@@ -221,11 +226,42 @@ func TestMetadataVerifier_CacheFilename(t *testing.T) {
 	}
 }
 
+func TestMetadataVerifier_InvalidCacheDir(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "not_a_dir")
+	if err := os.WriteFile(filePath, []byte("test"), 0600); err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+	if _, err := NewMetadataVerifier(filePath, "test", "app"); err == nil {
+		t.Fatal("Expected error when cacheDir is a file")
+	}
+}
+
+func TestMetadataVerifier_NonexistentCacheDir(t *testing.T) {
+	tempDir := t.TempDir()
+	nonexistent := filepath.Join(tempDir, "missing")
+	if _, err := NewMetadataVerifier(nonexistent, "test", "app"); err == nil {
+		t.Fatal("Expected error when cacheDir does not exist")
+	}
+}
+
+func TestMetadataVerifier_EmptyCacheDirUsesTemp(t *testing.T) {
+	verifier, err := NewMetadataVerifier("", "test", "app")
+	if err != nil {
+		t.Fatalf("NewMetadataVerifier returned error for empty cacheDir: %v", err)
+	}
+	if filepath.Clean(verifier.cacheDir) != filepath.Clean(os.TempDir()) {
+		t.Fatalf("Expected cacheDir %q to equal os.TempDir() %q", verifier.cacheDir, os.TempDir())
+	}
+	if filepath.Clean(filepath.Dir(verifier.cachePath)) != filepath.Clean(os.TempDir()) {
+		t.Fatalf("Expected cachePath directory %q to equal os.TempDir() %q", filepath.Dir(verifier.cachePath), os.TempDir())
+	}
+}
+
 func TestMetadataVerifier_CacheIntegrity(t *testing.T) {
 	tempDir := t.TempDir()
-	targetDir := t.TempDir()
 
-	verifier := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier := newTestVerifier(t, tempDir, "test", "app")
 	err := verifier.Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
@@ -246,7 +282,7 @@ func TestMetadataVerifier_CacheIntegrity(t *testing.T) {
 	}
 
 	// Load should detect corruption and start fresh
-	verifier2 := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier2 := newTestVerifier(t, tempDir, "test", "app")
 	err = verifier2.Load()
 	if err == nil {
 		t.Error("Load() should detect corrupted cache")
@@ -274,7 +310,7 @@ func TestMetadataVerifier_ConcurrentAccess(t *testing.T) {
 		testFiles = append(testFiles, testFile)
 	}
 
-	verifier := NewMetadataVerifier(tempDir, targetDir, "test", "app")
+	verifier := newTestVerifier(t, tempDir, "test", "app")
 	err := verifier.Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
