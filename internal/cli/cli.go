@@ -210,7 +210,7 @@ func (c *CLI) runGenerate(args []string) int {
 
 	if s3Bucket != "" {
 		// Upload to S3
-		s3Storage, err := storage.NewS3Storage(s3Bucket, s3Region)
+		s3Storage, err := storage.NewS3Storage(ctx, s3Bucket, s3Region)
 		if err != nil {
 			fmt.Fprintf(c.errStream, "Error: Failed to initialize S3: %v\n", err)
 			return ExitCodeFail
@@ -218,7 +218,7 @@ func (c *CLI) runGenerate(args []string) int {
 
 		if appName != "" {
 			// Use versioning
-			key, err := s3Storage.UploadWithVersioning(basePath, appName, m)
+			key, err := s3Storage.UploadWithVersioning(ctx, basePath, appName, m)
 			if err == nil {
 				s3KeyUsed = key
 			}
@@ -322,12 +322,23 @@ func (c *CLI) runVerify(args []string) int {
 		fmt.Fprintf(c.errStream, "Warning: rate-limit %d is very low (< 1KB/s), this may be too restrictive\n", rateLimit)
 	}
 
+	// Create context with signal handling
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Apply timeout if specified
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+		defer cancel()
+	}
+
 	// Load manifest
 	var m *manifest.Manifest
 
 	if s3Bucket != "" {
 		// Load from S3
-		s3Storage, err := storage.NewS3Storage(s3Bucket, s3Region)
+		s3Storage, err := storage.NewS3Storage(ctx, s3Bucket, s3Region)
 		if err != nil {
 			c.outputVerifyError(err, format)
 			return ExitCodeFail
@@ -335,7 +346,7 @@ func (c *CLI) runVerify(args []string) int {
 
 		if appName != "" {
 			// Load manifest
-			m, err = s3Storage.DownloadManifest(basePath, appName)
+			m, err = s3Storage.DownloadManifest(ctx, basePath, appName)
 		} else {
 			err = fmt.Errorf("-app-name must be specified with -s3-bucket")
 		}
@@ -355,17 +366,6 @@ func (c *CLI) runVerify(args []string) int {
 		err := fmt.Errorf("either -manifest or -s3-bucket must be specified")
 		c.outputVerifyError(err, format)
 		return ExitCodeFail
-	}
-
-	// Create context with signal handling
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	// Apply timeout if specified
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-		defer cancel()
 	}
 
 	// Verify integrity
