@@ -69,10 +69,7 @@ func throttledCopy(ctx context.Context, dst io.Writer, src io.Reader, buf []byte
 		}
 
 		// Read with limited chunk size
-		nr := maxChunk
-		if nr > len(buf) {
-			nr = len(buf)
-		}
+		nr := min(maxChunk, len(buf))
 
 		// Wait for rate limit
 		if err := limiter.WaitN(ctx, nr); err != nil {
@@ -120,10 +117,9 @@ func NewCalculatorWithRateLimit(numWorkers int, bytesPerSec int64) *Calculator {
 	var limiter *rate.Limiter
 	if bytesPerSec > 0 {
 		// Create rate limiter with burst equal to buffer size or 1MB, whichever is smaller
-		burstSize := int(bytesPerSec)
-		if burstSize > 1024*1024 {
-			burstSize = 1024 * 1024 // Max 1MB burst
-		}
+		burstSize := min(int(bytesPerSec),
+			// Max 1MB burst
+			1024*1024)
 		limiter = rate.NewLimiter(rate.Limit(bytesPerSec), burstSize)
 	}
 
@@ -505,12 +501,12 @@ func shouldSkipDirectory(dirPath string, excludes []string) bool {
 		// - "**/logs/**" should skip any "logs" directory at any level
 
 		// Pattern ends with /** - check if directory matches the prefix
-		if strings.HasSuffix(pattern, "/**") {
-			prefix := strings.TrimSuffix(pattern, "/**")
+		if before, ok := strings.CutSuffix(pattern, "/**"); ok {
+			prefix := before
 
 			// Handle ** prefix patterns like "**/logs"
-			if strings.HasPrefix(prefix, "**/") {
-				dirName := strings.TrimPrefix(prefix, "**/")
+			if after, ok := strings.CutPrefix(prefix, "**/"); ok {
+				dirName := after
 				if dirPath == dirName || strings.HasSuffix(dirPath, "/"+dirName) {
 					return true
 				}
@@ -538,14 +534,14 @@ func matchGlob(pattern, path string) bool {
 		}
 
 		// Handle patterns like "src/**" which should match everything under src/
-		if strings.HasSuffix(pattern, "/**") {
-			prefix := strings.TrimSuffix(pattern, "/**")
+		if before, ok := strings.CutSuffix(pattern, "/**"); ok {
+			prefix := before
 			return strings.HasPrefix(path, prefix+"/")
 		}
 
 		// Handle patterns like "**/*.js" which should match any .js file at any depth
-		if strings.HasPrefix(pattern, "**/") {
-			suffix := strings.TrimPrefix(pattern, "**/")
+		if after, ok := strings.CutPrefix(pattern, "**/"); ok {
+			suffix := after
 			matched, _ := filepath.Match(suffix, filepath.Base(path))
 			return matched
 		}

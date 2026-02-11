@@ -104,7 +104,7 @@ func TestIntegrationSymlinkAttackScenarios(t *testing.T) {
 		}
 
 		// Simulate attack: quickly switch between file and symlink
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			// Replace with symlink
 			if err := os.Remove(normalFile); err != nil {
 				t.Fatal(err)
@@ -347,9 +347,9 @@ func TestManifestGenerationAndVerificationPerformance(t *testing.T) {
 
 	// Create many files and symlinks
 	numFiles := 100
-	for i := 0; i < numFiles; i++ {
+	for i := range numFiles {
 		file := filepath.Join(tempDir, fmt.Sprintf("file%d.txt", i))
-		if err := os.WriteFile(file, []byte(fmt.Sprintf("content%d", i)), 0644); err != nil {
+		if err := os.WriteFile(file, fmt.Appendf(nil, "content%d", i), 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -413,9 +413,9 @@ func TestConcurrentVerification(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test files
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		file := filepath.Join(tempDir, fmt.Sprintf("file%d.txt", i))
-		if err := os.WriteFile(file, []byte(fmt.Sprintf("content%d", i)), 0644); err != nil {
+		if err := os.WriteFile(file, fmt.Appendf(nil, "content%d", i), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -428,14 +428,14 @@ func TestConcurrentVerification(t *testing.T) {
 
 	// Run multiple verifications concurrently
 	done := make(chan error, 5)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go func() {
 			done <- manifest.Verify(ctx, tempDir, 2)
 		}()
 	}
 
 	// All should succeed
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := <-done; err != nil {
 			t.Errorf("Concurrent verification %d failed: %v", i, err)
 		}

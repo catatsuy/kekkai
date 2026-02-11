@@ -19,7 +19,7 @@ func TestLargeDirectoryChannelBuffering(t *testing.T) {
 
 	// Create 500 test files
 	numFiles := 500
-	for i := 0; i < numFiles; i++ {
+	for i := range numFiles {
 		path := filepath.Join(tempDir, fmt.Sprintf("file_%04d.txt", i))
 		content := fmt.Sprintf("content of file %d", i)
 		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -64,7 +64,7 @@ func TestMassiveDirectoryMemoryEfficiency(t *testing.T) {
 	numFiles := 10000
 	t.Logf("Creating %d test files...", numFiles)
 
-	for i := 0; i < numFiles; i++ {
+	for i := range numFiles {
 		path := filepath.Join(tempDir, fmt.Sprintf("f%05d", i))
 		if err := os.WriteFile(path, []byte("x"), 0644); err != nil {
 			t.Fatal(err)
