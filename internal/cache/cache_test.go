@@ -300,7 +300,7 @@ func TestMetadataVerifier_ConcurrentAccess(t *testing.T) {
 
 	// Create test files
 	var testFiles []string
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		testFile := filepath.Join(targetDir, "test"+string(rune('0'+i))+".txt")
 		content := []byte("test content " + string(rune('0'+i)))
 		err := os.WriteFile(testFile, content, 0644)
@@ -320,7 +320,7 @@ func TestMetadataVerifier_ConcurrentAccess(t *testing.T) {
 	done := make(chan bool, 20)
 
 	// Start updaters
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(file string) {
 			defer func() { done <- true }()
 			err := verifier.UpdateMetadata(file)
@@ -331,7 +331,7 @@ func TestMetadataVerifier_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Start checkers
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(file string) {
 			defer func() { done <- true }()
 			// This shouldn't panic even if called concurrently
@@ -340,7 +340,7 @@ func TestMetadataVerifier_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		<-done
 	}
 }

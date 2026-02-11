@@ -542,10 +542,10 @@ func TestParallelSymlinkProcessing(t *testing.T) {
 
 	// Create many symlinks to test parallel processing
 	numFiles := 20
-	for i := 0; i < numFiles; i++ {
+	for i := range numFiles {
 		// Create regular files
 		file := filepath.Join(tempDir, fmt.Sprintf("file%d.txt", i))
-		if err := os.WriteFile(file, []byte(fmt.Sprintf("content%d", i)), 0644); err != nil {
+		if err := os.WriteFile(file, fmt.Appendf(nil, "content%d", i), 0644); err != nil {
 			t.Fatal(err)
 		}
 

@@ -12,10 +12,7 @@ import (
 )
 
 func TestNewCalculator(t *testing.T) {
-	maxWorkers := runtime.GOMAXPROCS(0)
-	if maxWorkers < 1 {
-		maxWorkers = 1
-	}
+	maxWorkers := max(runtime.GOMAXPROCS(0), 1)
 
 	withinCap := maxWorkers
 	if withinCap > 1 {
@@ -739,7 +736,7 @@ func TestParallelCalculation(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create 100 files
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		filename := filepath.Join(tempDir, fmt.Sprintf("file%03d.txt", i))
 		content := fmt.Sprintf("content of file %d", i)
 		if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
@@ -812,10 +809,7 @@ func TestRateLimitedCalculation(t *testing.T) {
 }
 
 func TestNewCalculatorWithRateLimit(t *testing.T) {
-	maxWorkers := runtime.GOMAXPROCS(0)
-	if maxWorkers < 1 {
-		maxWorkers = 1
-	}
+	maxWorkers := max(runtime.GOMAXPROCS(0), 1)
 
 	withinCap := maxWorkers
 	if withinCap > 1 {

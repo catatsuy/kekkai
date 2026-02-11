@@ -151,18 +151,18 @@ func ParseVerificationError(err error) *VerificationDetails {
 
 	// Parse error message to extract file changes
 	errStr := err.Error()
-	lines := strings.Split(errStr, "\n")
+	lines := strings.SplitSeq(errStr, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "modified:") {
-			file := strings.TrimSpace(strings.TrimPrefix(line, "modified:"))
+		if after, ok := strings.CutPrefix(line, "modified:"); ok {
+			file := strings.TrimSpace(after)
 			details.ModifiedFiles = append(details.ModifiedFiles, file)
-		} else if strings.HasPrefix(line, "deleted:") {
-			file := strings.TrimSpace(strings.TrimPrefix(line, "deleted:"))
+		} else if after, ok := strings.CutPrefix(line, "deleted:"); ok {
+			file := strings.TrimSpace(after)
 			details.DeletedFiles = append(details.DeletedFiles, file)
-		} else if strings.HasPrefix(line, "added:") {
-			file := strings.TrimSpace(strings.TrimPrefix(line, "added:"))
+		} else if after, ok := strings.CutPrefix(line, "added:"); ok {
+			file := strings.TrimSpace(after)
 			details.AddedFiles = append(details.AddedFiles, file)
 		}
 	}
