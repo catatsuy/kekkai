@@ -16,8 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Run govulncheck
     steps:
-      - id: govulncheck
-        uses: golang/govulncheck-action@v1
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
-          go-version-input: 1.25.7
-          go-package: ./...
+          go-version: 1.25.7
+          cache-dependency-path: go.sum
+
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
