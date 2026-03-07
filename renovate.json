@@ -41,10 +41,12 @@
   ],
   "packageRules": [
     {
-      "matchDepNames": [
-        "go-security"
+      "matchFileNames": [
+        ".github/workflows/security.yml",
+        "osv-scanner.toml"
       ],
-      "groupName": "go-version-security"
+      "groupName": "go-version-security",
+      "groupSlug": "go-version-security"
     }
   ],
   "postUpdateOptions": [
