@@ -73,8 +73,7 @@ func (v *MetadataVerifier) Load() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	data, err := os.ReadFile(v.cachePath)
-	if err != nil {
+	if err := v.verifyCacheFileOwnership(); err != nil {
 		if os.IsNotExist(err) {
 			// Initialize empty cache
 			v.data = &MetadataCache{
@@ -84,6 +83,16 @@ func (v *MetadataVerifier) Load() error {
 			}
 			return nil
 		}
+		v.data = &MetadataCache{
+			Version:   "2.0",
+			CreatedAt: time.Now(),
+			Files:     make(map[string]MetadataEntry),
+		}
+		return err
+	}
+
+	data, err := os.ReadFile(v.cachePath)
+	if err != nil {
 		return fmt.Errorf("failed to read cache: %w", err)
 	}
 
@@ -325,16 +334,14 @@ func (v *MetadataVerifier) Remove() error {
 // verifyCacheIntegrity checks if the cache file has been tampered with
 func (v *MetadataVerifier) verifyCacheIntegrity(cache *MetadataCache) bool {
 	if cache == nil || cache.CacheHash == "" {
-		// No hash to verify
-		return true // Allow empty cache
+		return false
 	}
 
-	// Store and clear hash for verification
 	expectedHash := cache.CacheHash
+
 	tempCache := *cache
 	tempCache.CacheHash = ""
 
-	// Recalculate hash
 	data, err := json.Marshal(tempCache)
 	if err != nil {
 		return false
@@ -345,4 +352,21 @@ func (v *MetadataVerifier) verifyCacheIntegrity(cache *MetadataCache) bool {
 	actualHash := hex.EncodeToString(hasher.Sum(nil))
 
 	return actualHash == expectedHash
+}
+
+func (v *MetadataVerifier) verifyCacheFileOwnership() error {
+	info, err := os.Stat(v.cachePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return err
+		}
+		return fmt.Errorf("failed to stat cache: %w", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		return fmt.Errorf("cache file %q has insecure permissions %o, starting fresh", v.cachePath, info.Mode().Perm())
+	}
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok && stat.Uid != uint32(os.Geteuid()) {
+		return fmt.Errorf("cache file %q is not owned by the current user, starting fresh", v.cachePath)
+	}
+	return nil
 }
