@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -276,7 +277,7 @@ func TestMetadataVerifier_CacheIntegrity(t *testing.T) {
 	// Manually corrupt the cache file
 	cacheFile := verifier.cachePath
 	corruptedData := []byte(`{"version":"2.0","cache_hash":"invalid","files":{}}`)
-	err = os.WriteFile(cacheFile, corruptedData, 0644)
+	err = os.WriteFile(cacheFile, corruptedData, 0600)
 	if err != nil {
 		t.Fatalf("Failed to write corrupted cache: %v", err)
 	}
@@ -291,6 +292,70 @@ func TestMetadataVerifier_CacheIntegrity(t *testing.T) {
 	// Data should still be initialized (fresh cache)
 	if verifier2.data == nil || verifier2.data.Version != "2.0" {
 		t.Error("Cache should be initialized even after corruption")
+	}
+}
+
+func TestMetadataVerifier_CacheIntegrityRejectsEmptyHash(t *testing.T) {
+	tempDir := t.TempDir()
+	targetDir := t.TempDir()
+	testFile := filepath.Join(targetDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	verifier := newTestVerifier(t, tempDir, "test", "app")
+	if err := verifier.Load(); err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if err := verifier.UpdateMetadata(testFile); err != nil {
+		t.Fatalf("UpdateMetadata() failed: %v", err)
+	}
+	if err := verifier.Save(); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	cacheFile := verifier.cachePath
+	data, err := os.ReadFile(cacheFile)
+	if err != nil {
+		t.Fatalf("Failed to read cache: %v", err)
+	}
+	var unsignedCache MetadataCache
+	if err := json.Unmarshal(data, &unsignedCache); err != nil {
+		t.Fatalf("Failed to unmarshal cache: %v", err)
+	}
+	unsignedCache.CacheHash = ""
+	unsignedData, err := json.Marshal(unsignedCache)
+	if err != nil {
+		t.Fatalf("Failed to marshal unsigned cache: %v", err)
+	}
+	if err := os.WriteFile(cacheFile, unsignedData, 0600); err != nil {
+		t.Fatalf("Failed to write unsigned cache: %v", err)
+	}
+
+	verifier2 := newTestVerifier(t, tempDir, "test", "app")
+	if err := verifier2.Load(); err == nil {
+		t.Fatal("Load() should reject cache with empty integrity hash")
+	}
+	if verifier2.CheckMetadata(testFile) {
+		t.Fatal("Unsigned cache entry should not be used")
+	}
+}
+
+func TestMetadataVerifier_IgnoresCacheWithInsecurePermissions(t *testing.T) {
+	tempDir := t.TempDir()
+
+	verifier := newTestVerifier(t, tempDir, "test", "app")
+	cacheFile := verifier.cachePath
+	cacheData := []byte(`{"version":"2.0","cache_hash":"invalid","files":{}}`)
+	if err := os.WriteFile(cacheFile, cacheData, 0644); err != nil {
+		t.Fatalf("Failed to write insecure cache: %v", err)
+	}
+
+	if err := verifier.Load(); err == nil {
+		t.Fatal("Load() should ignore cache with insecure permissions")
+	}
+	if verifier.data == nil || verifier.data.Version != "2.0" {
+		t.Fatal("Cache should be initialized fresh after insecure permissions")
 	}
 }
 

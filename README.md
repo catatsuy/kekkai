@@ -545,7 +545,7 @@ If all metadata matches, it uses the cached hash. The `--verify-probability` opt
 - `0.1`: 10% chance to verify hash even with cache hit (default, good balance)
 - `1.0`: Always verify hash (most secure, no performance benefit)
 
-The cache file itself is protected with a hash to detect tampering.
+The cache file itself must be owned by the current user with `0600` permissions. Caches with missing integrity hashes, invalid integrity hashes, unexpected ownership, or unexpected permissions are ignored and rebuilt.
 
 ⚠️ **Security Note:** Cache mode is secure against casual tampering due to ctime checking, but a sophisticated attacker with root access could potentially forge metadata. The probabilistic verification adds an additional layer of security.
 
@@ -580,7 +580,7 @@ systemd-run --quiet --wait --pipe --collect \
 This approach provides more comprehensive resource control:
 - `CPUQuota=25%`: Limits CPU usage to 25%
 - `CPUWeight=50`: Sets CPU scheduling weight (lower priority)
-- `PrivateTmp=no`: Allows cache persistence in `/tmp` across runs
+- `PrivateTmp=no`: Required for the default `/tmp` cache to be reused by repeated one-shot `systemd-run` executions
 - `User=nobody`: Runs with minimal privileges for security
 - `nice -n 10`: Lower process priority
 - `ionice -c2 -n7`: Best-effort I/O scheduling with lowest priority
@@ -588,7 +588,7 @@ This approach provides more comprehensive resource control:
 - `--verify-probability 0.1`: 10% chance to verify hash even with cache hit
 - `--rate-limit 10485760`: Limits I/O to 10MB/s
 
-**Important**: The `PrivateTmp=no` setting is required when using `--use-cache` to ensure cache files persist between systemd-run executions. Without this, systemd creates an isolated `/tmp` directory for each run, preventing cache reuse. If you prefer stronger isolation, use `--cache-dir` to specify a persistent directory outside of `/tmp`:
+**Important**: `kekkai verify` is a one-shot command, not a long-running daemon. With `systemd-run`, `PrivateTmp=yes` gives each execution its own isolated `/tmp`, so the default temp-directory cache cannot be reused across runs. Use `PrivateTmp=no` with the default cache, or keep `PrivateTmp=yes` and set `--cache-dir` to a persistent directory outside `/tmp`:
 
 ```bash
 # Alternative: Keep PrivateTmp=yes but use a custom cache directory
