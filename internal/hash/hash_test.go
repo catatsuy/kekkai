@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -82,26 +83,23 @@ func TestCalculateFileHash(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary file
-			tmpfile, err := os.CreateTemp("", "test")
+			tempDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			root, err := os.OpenRoot(tempDir)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer os.Remove(tmpfile.Name())
-
-			if _, err := tmpfile.Write([]byte(tt.content)); err != nil {
-				t.Fatal(err)
-			}
-			if err := tmpfile.Close(); err != nil {
-				t.Fatal(err)
-			}
+			defer root.Close()
 
 			// Calculate hash
 			calc := NewCalculator(0)
 			hasher := sha256.New()
 			buf := make([]byte, calc.bufferSize)
 			ctx := context.Background()
-			hash, err := calc.hashFileWithHasher(ctx, tmpfile.Name(), hasher, buf)
+			hash, err := calc.hashFileWithHasher(ctx, root, "test.txt", hasher, buf)
 			if err != nil {
 				t.Fatalf("hashFileWithHasher() error = %v", err)
 			}
@@ -150,6 +148,68 @@ func TestCalculateDirectory(t *testing.T) {
 		if result.Files[i].Hash != result2.Files[i].Hash {
 			t.Errorf("File hash mismatch for %s", result.Files[i].Path)
 		}
+	}
+}
+
+func TestCollectFilesReturnsRelativeJobs(t *testing.T) {
+	rootDir := t.TempDir()
+
+	testFiles := map[string]string{
+		"root.txt":             "root",
+		"nested/child.txt":     "nested",
+		"excluded/ignored.txt": "excluded",
+	}
+	for relPath, content := range testFiles {
+		path := filepath.Join(rootDir, filepath.FromSlash(relPath))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	calc := NewCalculator(2)
+	jobs, err := calc.collectFiles(rootDir, []string{"excluded/**"})
+	if err != nil {
+		t.Fatalf("collectFiles() error = %v", err)
+	}
+
+	relPaths := make([]string, 0, len(jobs))
+	for _, job := range jobs {
+		if filepath.IsAbs(job.relPath) {
+			t.Errorf("collectFiles() returned absolute path %q", job.relPath)
+		}
+		if strings.Contains(job.relPath, `\`) {
+			t.Errorf("collectFiles() returned non-normalized path %q", job.relPath)
+		}
+		relPaths = append(relPaths, job.relPath)
+	}
+	slices.Sort(relPaths)
+
+	expectedPaths := []string{"nested/child.txt", "root.txt"}
+	if !slices.Equal(relPaths, expectedPaths) {
+		t.Fatalf("collectFiles() paths = %v, want %v", relPaths, expectedPaths)
+	}
+
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	fileInfos, err := calc.calculateFileHashes(context.Background(), root, rootDir, jobs)
+	if err != nil {
+		t.Fatalf("calculateFileHashes() error = %v", err)
+	}
+
+	resultPaths := make([]string, 0, len(fileInfos))
+	for _, fileInfo := range fileInfos {
+		resultPaths = append(resultPaths, fileInfo.Path)
+	}
+	slices.Sort(resultPaths)
+	if !slices.Equal(resultPaths, expectedPaths) {
+		t.Errorf("calculateFileHashes() paths = %v, want %v", resultPaths, expectedPaths)
 	}
 }
 
