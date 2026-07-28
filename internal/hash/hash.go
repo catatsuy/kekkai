@@ -37,6 +37,11 @@ type Result struct {
 	FileCount int        `json:"file_count"`
 }
 
+// fileJob identifies a file by its slash-normalized path relative to the target directory.
+type fileJob struct {
+	relPath string
+}
+
 // Calculator handles hash calculation for files and directories
 type Calculator struct {
 	numWorkers        int
@@ -224,6 +229,12 @@ func (c *Calculator) CalculateDirectory(ctx context.Context, rootDir string, exc
 		return nil, fmt.Errorf("failed to resolve target directory: %w", err)
 	}
 
+	root, err := os.OpenRoot(resolvedDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open target directory: %w", err)
+	}
+	defer root.Close()
+
 	// Collect files
 	files, err := c.collectFiles(resolvedDir, excludes)
 	if err != nil {
@@ -231,7 +242,7 @@ func (c *Calculator) CalculateDirectory(ctx context.Context, rootDir string, exc
 	}
 
 	// Calculate hashes in parallel
-	fileInfos, err := c.calculateFileHashes(ctx, resolvedDir, files)
+	fileInfos, err := c.calculateFileHashes(ctx, root, resolvedDir, files)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate file hashes: %w", err)
 	}
@@ -247,9 +258,9 @@ func (c *Calculator) CalculateDirectory(ctx context.Context, rootDir string, exc
 	}, nil
 }
 
-// collectFiles walks the directory and collects files based on patterns
-func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, error) {
-	files := make([]string, 0, 50) // Start with capacity for 50 files
+// collectFiles walks the directory and collects relative file paths based on patterns
+func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]fileJob, error) {
+	files := make([]fileJob, 0, 50) // Start with capacity for 50 files
 
 	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -284,7 +295,7 @@ func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, 
 			return nil
 		}
 
-		files = append(files, path)
+		files = append(files, fileJob{relPath: relPath})
 		return nil
 	})
 
@@ -292,12 +303,12 @@ func (c *Calculator) collectFiles(rootDir string, excludes []string) ([]string, 
 }
 
 // calculateFileHashes calculates hashes for multiple files in parallel
-func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, files []string) ([]FileInfo, error) {
+func (c *Calculator) calculateFileHashes(ctx context.Context, root *os.Root, resolvedDir string, files []fileJob) ([]FileInfo, error) {
 	var wg sync.WaitGroup
 	// Use smaller buffer sizes to avoid excessive memory usage with large directories
 	// Buffer size is min(numWorkers * 2, 100) to balance between performance and memory
 	bufferSize := min(c.numWorkers*2, 100)
-	jobs := make(chan string, bufferSize)
+	jobs := make(chan fileJob, bufferSize)
 	results := make(chan FileInfo, bufferSize)
 	errors := make(chan error, bufferSize)
 
@@ -312,26 +323,26 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 				select {
 				case <-ctx.Done():
 					return
-				case path, ok := <-jobs:
+				case job, ok := <-jobs:
 					if !ok {
 						return
 					}
 
-					info, err := os.Lstat(path) // Use Lstat to get symlink info
+					relPath := job.relPath
+
+					info, err := root.Lstat(relPath) // Use Lstat to get symlink info
 					if err != nil {
-						errors <- fmt.Errorf("failed to stat %s: %w", path, err)
+						errors <- fmt.Errorf("failed to stat %s: %w", relPath, err)
 						continue
 					}
-
-					relPath, _ := filepath.Rel(rootDir, path)
-					relPath = filepath.ToSlash(relPath)
 
 					var fileHash string
 					needHashCalculation := true
 
 					// Check cache if available (not for symlinks)
 					if c.metadataCache != nil && info.Mode()&os.ModeSymlink == 0 {
-						if c.metadataCache.CheckMetadata(path) {
+						absPath := filepath.Join(resolvedDir, filepath.FromSlash(relPath))
+						if c.metadataCache.CheckMetadata(absPath) {
 							// Metadata matches - decide whether to verify based on probability
 							if c.verifyProbability == 0 || rand.Float64() > c.verifyProbability {
 								// Skip hash calculation, use manifest hash if available
@@ -369,9 +380,9 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 
 					// Handle symlinks or calculate hash if needed
 					if needHashCalculation && info.Mode()&os.ModeSymlink != 0 {
-						target, err := os.Readlink(path)
+						target, err := root.Readlink(relPath)
 						if err != nil {
-							errors <- fmt.Errorf("failed to read symlink %s: %w", path, err)
+							errors <- fmt.Errorf("failed to read symlink %s: %w", relPath, err)
 							continue
 						}
 
@@ -383,9 +394,9 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 					} else if needHashCalculation {
 						// Regular file - calculate hash
 						var err error
-						fileHash, err = c.hashFileWithHasher(ctx, path, hasher, buf)
+						fileHash, err = c.hashFileWithHasher(ctx, root, relPath, hasher, buf)
 						if err != nil {
-							errors <- fmt.Errorf("failed to hash %s: %w", path, err)
+							errors <- fmt.Errorf("failed to hash %s: %w", relPath, err)
 							continue
 						}
 
@@ -400,7 +411,7 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 						IsSymlink: info.Mode()&os.ModeSymlink != 0,
 						LinkTarget: func() string {
 							if info.Mode()&os.ModeSymlink != 0 {
-								target, _ := os.Readlink(path)
+								target, _ := root.Readlink(relPath)
 								return target
 							}
 							return ""
@@ -456,8 +467,8 @@ func (c *Calculator) calculateFileHashes(ctx context.Context, rootDir string, fi
 }
 
 // hashFileWithHasher calculates hash of a file using provided hasher and buffer (for reuse)
-func (c *Calculator) hashFileWithHasher(ctx context.Context, path string, hasher hash.Hash, buf []byte) (string, error) {
-	file, err := os.Open(path)
+func (c *Calculator) hashFileWithHasher(ctx context.Context, root *os.Root, relPath string, hasher hash.Hash, buf []byte) (string, error) {
+	file, err := root.Open(relPath)
 	if err != nil {
 		return "", err
 	}
